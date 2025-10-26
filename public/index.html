@@ -70,6 +70,9 @@
 			vertical-align: middle; 
 			margin: 0 6px; 
 		}
+        /* Permitir copiar el nombre con un clic */
+        #nameBadge { cursor: pointer; user-select: none; }
+        #nameBadge.copied { border-color: rgba(156,134,255,0.6); box-shadow: 0 0 0 2px rgba(156,134,255,0.2) inset; }
 		.content { padding: 18px; }
 		.login-grid { display: grid; gap: 12px; }
 		.field { display: grid; gap: 6px; }
@@ -672,6 +675,29 @@
 		} catch {}
 	}
 
+		// Utilidad: copiar texto al portapapeles con fallback
+		async function copyToClipboard(text){
+			try {
+				if (navigator.clipboard && window.isSecureContext) {
+					await navigator.clipboard.writeText(String(text || ''));
+					return true;
+				}
+			} catch {}
+			try {
+				const ta = document.createElement('textarea');
+				ta.value = String(text || '');
+				ta.setAttribute('readonly','');
+				ta.style.position = 'fixed';
+				ta.style.top = '-9999px';
+				document.body.appendChild(ta);
+				ta.focus();
+				ta.select();
+				const ok = document.execCommand('copy');
+				document.body.removeChild(ta);
+				return !!ok;
+			} catch { return false; }
+		}
+
 	function setView(isLoggedIn) {
 		isLoggedInFlag = !!isLoggedIn;
 		loginCard.style.display = isLoggedIn ? 'none' : '';
@@ -1157,7 +1183,7 @@
 			function getDisplayName(userKey) {
 				if (!userKey) return userKey;
 				return userAliases[userKey] || userAliases[(userKey.toLowerCase ? userKey.toLowerCase() : userKey)] || userKey;
-			}			function updateActiveChatHeader() {
+			} 			function updateActiveChatHeader() {
 					if (selectedUserKey) {
 						nameBadge.textContent = getDisplayName(selectedUserKey) || selectedUserKey || '-';
 					} else if (currentUser.role === 'admin') {
@@ -1165,6 +1191,23 @@
 					} else {
 						nameBadge.textContent = currentUser.name || '-';
 					}
+				}
+
+				// Hacer clic en el nombre para copiarlo
+				if (nameBadge) {
+					nameBadge.title = 'Copiar nombre';
+					nameBadge.addEventListener('click', async () => {
+						const txt = (nameBadge.textContent || '').trim();
+						if (!txt || txt === '-') return;
+						const prev = nameBadge.textContent;
+						const ok = await copyToClipboard(txt);
+						nameBadge.classList.add('copied');
+						nameBadge.textContent = ok ? `${txt} ✓` : txt;
+						setTimeout(() => {
+							nameBadge.textContent = prev;
+							nameBadge.classList.remove('copied');
+						}, 1200);
+					});
 				}
 
 				function appendMessage(id, msg, userKey) {
