@@ -63,6 +63,8 @@
 		}
 		.title { font-size: 18px; font-weight: 600; letter-spacing: 0.3px; }
 		.badge { font-size: 12px; padding: 4px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); background: #0f121a; }
+		.badge.editable { min-width: 80px; text-align: left; cursor: text; }
+		.badge.editable:empty::after { content: 'Nota'; opacity: .6; }
 		.badge-logo { 
 			width: 1.15em; 
 			height: 1.15em; 
@@ -392,7 +394,7 @@
 					<div>
 						<span class="badge" id="roleBadge">Usuario</span>
 						<span class="badge" id="nameBadge">-</span>
-						<span class="badge" id="adminNoteBadge" style="display:none;"></span>
+						<span class="badge editable" id="adminNoteBadge" style="display:none;" contenteditable="false"></span>
 
 						<button class="btn" id="logoutBtn" type="button" title="Cerrar sesión">Salir</button>
 					</div>
@@ -771,21 +773,33 @@
 			messageInput.value = '';
 			messageInput.focus();
 			if (isAdmin) {
-				if (adminNoteBadge) adminNoteBadge.style.display = '';
+				if (adminNoteBadge) {
+					adminNoteBadge.style.display = '';
+					adminNoteBadge.contentEditable = 'true';
+					adminNoteBadge.setAttribute('spellcheck', 'false');
+				}
 				selectedUserKey = selectedUserKey || null;
 				ensureAdminSubscriptions();
 				// Solicitar permisos de notificaciones para el admin
 				requestNotificationPermission();
 				stopInactivityWatch && stopInactivityWatch();
 			} else {
-				if (adminNoteBadge) adminNoteBadge.style.display = 'none';
+				if (adminNoteBadge) {
+					adminNoteBadge.style.display = 'none';
+					adminNoteBadge.contentEditable = 'false';
+					adminNoteBadge.textContent = '';
+				}
 				teardownAdminSubscriptions();
 				selectedUserKey = currentUser.name;
 				loadChat(selectedUserKey);
 				startInactivityWatch && startInactivityWatch();
 			}
 		} else {
-			if (adminNoteBadge) adminNoteBadge.style.display = 'none';
+			if (adminNoteBadge) {
+				adminNoteBadge.style.display = 'none';
+				adminNoteBadge.contentEditable = 'false';
+				adminNoteBadge.textContent = '';
+			}
 			teardownAdminSubscriptions();
 			usernameEl.focus();
 			selectedUserKey = null;
