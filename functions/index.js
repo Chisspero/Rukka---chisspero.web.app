@@ -48,6 +48,12 @@ async function resetConversationsMetadata(db) {
   };
 
   for (const docSnap of snap.docs) {
+    const data = docSnap.data() || {};
+    const alreadyReset = !data.hasHistory && !data.lastMessageTs && !data.lastMessageType && !data.lastMessagePreview;
+    if (alreadyReset) {
+      continue;
+    }
+
     batch.set(docSnap.ref, template, { merge: true });
     count += 1;
     total += 1;
