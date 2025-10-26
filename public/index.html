@@ -611,21 +611,38 @@
 	let renderedMessageIds = new Set();
 	let messagesScrollHandler = null;
 	let inactivityTimerId = null;
-	let inactivityHandlersBound = false;
-	let notificationSound = null; // buffer por defecto (Web Audio)
-	let customNotificationDataUrl = null; // data URL del sonido personalizado
-	let customNotificationAudio = null; // elemento de audio reutilizable
-	let pendingCustomSoundDataUrl = null; // data URL cargado en el diálogo, aún no guardado
-	let unreadCounts = {}; // { userKey: count }
-	let lastMessageTimestamps = {}; // Para detectar mensajes nuevos
-	let notificationsEnabled = false;
-	let audioContextSingleton = null;
-	let knownUserKeys = new Set();
-	let userListHydrated = false;
-	let isLoggedInFlag = false;
-	let serverTimeOffsetMs = 0; // delta de reloj con el servidor RTDB
-	// Estado de lectura persistente por chat (solo admin)
-	let adminReadState = {}; // { userKey: lastReadTs }
+		let payload = null;
+		let storagePath = null;
+		try {
+			const safeUserKey = encodeURIComponent(userChatKey);
+			const fileId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+			storagePath = `attachments/${safeUserKey}/${fileId}.webm`;
+			const storageReference = storageRef(storage, storagePath);
+			await uploadBytes(storageReference, audioBlob, { contentType: 'audio/webm' });
+			const audioUrl = await getDownloadURL(storageReference);
+			payload = {
+				type: 'audio',
+				audioUrl,
+				storagePath,
+				sender: currentUser.role === 'admin' ? 'Administrador' : currentUser.name || 'Anónimo',
+				role: currentUser.role,
+				ts: nowMs(),
+				timestamp: serverTimestamp()
+			};
+		} catch (err) {
+			console.warn('No se pudo subir audio a Storage, se usa base64 fallback:', err);
+			const audioDataUrl = await blobToDataUrl(audioBlob);
+			payload = {
+				type: 'audio',
+				audioDataUrl,
+				storagePath: null,
+				sender: currentUser.role === 'admin' ? 'Administrador' : currentUser.name || 'Anónimo',
+				role: currentUser.role,
+				ts: nowMs(),
+				timestamp: serverTimestamp()
+			};
+			storagePath = null;
+		}
 	let unsubscribeAdminReads = null;
 
 	// Índice de mensajes renderizados para acciones (p.ej., borrar)
@@ -1660,6 +1677,19 @@
 				return `${m}:${s}`;
 			}
 
+			function blobToDataUrl(blob) {
+				return new Promise((resolve, reject) => {
+					try {
+						const reader = new FileReader();
+						reader.onloadend = () => resolve(String(reader.result || ''));
+						reader.onerror = () => reject(reader.error || new Error('No se pudo leer el blob'));
+						reader.readAsDataURL(blob);
+					} catch (err) {
+						reject(err);
+					}
+				});
+			}
+
 			function startRecordingTimer() {
 				recordingStartedAt = Date.now();
 				recordingTimeEl.textContent = '00:00';
@@ -1795,28 +1825,41 @@
 					cancelImageBtn.disabled = true;
 					let userChatKey = null;
 					if (currentUser.role === 'admin') {
-						if (!selectedUserKey) return;
+						if (!selectedUserKey) {
+							throw new Error('No hay un chat seleccionado');
+						}
 						userChatKey = selectedUserKey;
 					} else {
 						userChatKey = currentUser.name;
 					}
-					if (!userChatKey) return;
+					if (!userChatKey) {
+						throw new Error('No hay un chat seleccionado');
+					}
 					const convRef = ref(db, 'chat/conversaciones/' + userChatKey);
 					const dataUrl = await compressImageToDataURL(file, { maxSize: 960, quality: 0.75 });
 					const approxBytes = Math.ceil((dataUrl.length - 'data:image/jpeg;base64,'.length) * 3 / 4);
 					if (approxBytes > 400 * 1024) {
 						throw new Error('La imagen es muy pesada');
 					}
-					const safeUserKey = encodeURIComponent(userChatKey);
-					const fileId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-					const storagePath = `attachments/${safeUserKey}/${fileId}.jpg`;
-					const storageReference = storageRef(storage, storagePath);
-					await uploadString(storageReference, dataUrl, 'data_url', { contentType: 'image/jpeg' });
-					const imageUrl = await getDownloadURL(storageReference);
+					let imageUrl = null;
+					let storagePath = null;
+					try {
+						const safeUserKey = encodeURIComponent(userChatKey);
+						const fileId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+						storagePath = `attachments/${safeUserKey}/${fileId}.jpg`;
+						const storageReference = storageRef(storage, storagePath);
+						await uploadString(storageReference, dataUrl, 'data_url', { contentType: 'image/jpeg' });
+						imageUrl = await getDownloadURL(storageReference);
+					} catch (err) {
+						console.warn('No se pudo subir imagen a Storage, se usa base64 fallback:', err);
+						storagePath = null;
+						imageUrl = null;
+					}
 					const payload = {
 						type: 'image',
-						imageUrl,
-						storagePath,
+						imageUrl: imageUrl || null,
+						imageDataUrl: imageUrl ? null : dataUrl,
+						storagePath: imageUrl ? storagePath : null,
 						name: file.name || null,
 						sender: currentUser.role === 'admin' ? 'Administrador' : currentUser.name || 'Anónimo',
 						role: currentUser.role,
@@ -2061,20 +2104,24 @@
 			}
 
 			function attemptOpenNotificationSettings() {
-				if (typeof window === 'undefined') return false;
 				try {
 					const ua = (navigator.userAgent || '').toLowerCase();
-					const mappings = [
-						{ match: (u) => u.includes('edg'), url: 'edge://settings/content/notifications' },
-						{ match: (u) => u.includes('opr') || u.includes('opera'), url: 'opera://settings/content/notifications' },
-						{ match: (u) => u.includes('chrome') && !u.includes('edg') && !u.includes('opr'), url: 'chrome://settings/content/notifications' },
-						{ match: (u) => u.includes('firefox'), url: 'about:preferences#privacy' }
-					];
-					for (const entry of mappings) {
-						if (entry.match(ua)) {
-							const popup = window.open(entry.url, '_blank');
-							return !!popup;
-						}
+					const origin = encodeURIComponent(window.location.origin);
+					if (ua.includes('edg')) {
+						window.open(`edge://settings/content/siteDetails?site=${origin}`, '_blank', 'noopener,noreferrer');
+						return true;
+					}
+					if (ua.includes('chrome') && !ua.includes('edg') && !ua.includes('opr')) {
+						window.open(`chrome://settings/content/siteDetails?site=${origin}`, '_blank', 'noopener,noreferrer');
+						return true;
+					}
+					if (ua.includes('firefox')) {
+						window.open('about:preferences#privacy', '_blank', 'noopener,noreferrer');
+						return true;
+					}
+					if (ua.includes('safari') && !ua.includes('chrome') && !ua.includes('crios')) {
+						alert('Abrí Ajustes > Safari > Notificaciones y habilitá este sitio manualmente.');
+						return false;
 					}
 				} catch (err) {
 					console.warn('No se pudo abrir la configuración de notificaciones:', err);
