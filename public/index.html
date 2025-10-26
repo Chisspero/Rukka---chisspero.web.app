@@ -1,0 +1,2422 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>Red Zenon</title>
+	<link rel="icon" type="image/png" href="assets/logo.png" />
+	<link rel="stylesheet" href="css/style.css" />
+	<link rel="preconnect" href="https://www.gstatic.com" crossorigin />
+	<link rel="preconnect" href="https://firebasestorage.googleapis.com" crossorigin />
+	<style>
+		:root {
+			--bg: #0a0b10;
+			--bg-grad-a: #0a0b10;
+			--bg-grad-b: #0f1630;
+			--panel: #11131a;
+			--panel-grad-a: #11131a;
+			--panel-grad-b: #0f1118;
+			--muted: #a9b2c0;
+			--text: #eef2f8;
+			--primary: #9c86ff;
+			--primary-strong: #7a63f1;
+			--accent: #ffbe0b;
+			--danger: #ff6b6b;
+			--success: #55d69c;
+			--border: #1d2130;
+			--shadow: rgba(0,0,0,0.5);
+		}
+		html, body { height: 100%; }
+		body {
+			margin: 0;
+			background: radial-gradient(1200px 800px at 10% 0%, var(--bg-grad-b), transparent) ,
+				linear-gradient(180deg, var(--bg-grad-a) 0%, var(--bg-grad-b) 100%);
+			color: var(--text);
+			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", Arial, sans-serif;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+		}
+		.container {
+			width: 100%;
+			max-width: 1600px;
+			padding: 24px;
+		}
+		#loginCard { max-width: 760px; margin: 0 auto; }
+		#loginCard .content { padding: 28px 22px 28px 22px; }
+		#loginCard .login-grid { gap: 14px; }
+		#loginCard .actions { margin-top: 10px; }
+		.card {
+			background: linear-gradient(180deg, var(--panel-grad-a), var(--panel-grad-b));
+			border: 1px solid var(--border);
+			border-radius: 14px;
+			overflow: hidden;
+			box-shadow: 0 16px 40px var(--shadow);
+			position: relative; /* para overlays internos */
+		}
+		.header {
+			padding: 18px 20px;
+			border-bottom: 1px solid var(--border);
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+		}
+		.title { font-size: 18px; font-weight: 600; letter-spacing: 0.3px; }
+		.badge { font-size: 12px; padding: 4px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); background: #0f121a; }
+		.badge-logo { 
+			width: 1.15em; 
+			height: 1.15em; 
+			object-fit: contain; 
+			vertical-align: middle; 
+			margin: 0 6px; 
+		}
+		.content { padding: 18px; }
+		.login-grid { display: grid; gap: 12px; }
+		.field { display: grid; gap: 6px; }
+		.label { color: var(--muted); font-size: 13px; }
+		.input {
+			background: #0e0e0f;
+			color: var(--text);
+			border: 1px solid var(--border);
+			border-radius: 6px;
+			padding: 13px 14px;
+			outline: none;
+		}
+		.input:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(156, 134, 255, 0.18); }
+		.actions { display: flex; gap: 12px; align-items: center; justify-content: flex-end; margin-top: 6px; }
+		.btn {
+			border: 1px solid var(--border);
+			background: linear-gradient(180deg, #1a1b22, #12131a);
+			color: var(--text);
+			padding: 10px 14px;
+			border-radius: 10px;
+			cursor: pointer;
+			transition: transform .12s ease, box-shadow .18s ease, border-color .18s ease;
+		}
+		.btn:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(0,0,0,0.25); border-color: #2a2f45; }
+		.btn.primary { border-color: rgba(156,134,255,0.35); background: linear-gradient(180deg, #262341, #191a2a); color: #ede9ff; }
+		.btn.primary:hover { border-color: rgba(156,134,255,0.6); box-shadow: 0 8px 22px rgba(124,102,255,0.18); }
+		.error { color: var(--danger); font-size: 13px; min-height: 18px; }
+
+	/* Enfatizar el botón de ingresar sin afectar otros botones */
+	#loginBtn { padding: 12px 18px; font-size: 15px; }
+
+		/* Chat */
+		.chat-wrapper { height: 70vh; display: grid; grid-template-rows: 1fr auto auto; gap: 12px; }
+		.messages {
+			position: relative;
+			background: radial-gradient(900px 420px at 110% -10%, rgba(156,134,255,0.06), transparent), #0f1116;
+			border: 1px solid var(--border);
+			border-radius: 12px;
+			padding: 12px;
+			overflow: auto;
+		}
+		.messages::before {
+			content: '';
+			position: absolute;
+			inset: 0;
+			pointer-events: none;
+			background: url('assets/logo.png') no-repeat center center;
+			background-size: clamp(160px, 40%, 420px);
+			opacity: 0.04;
+		}
+		.msg { margin: 10px 0; display: grid; gap: 6px; }
+		.meta { color: var(--muted); font-size: 12px; display: flex; gap: 8px; align-items: center; }
+		.meta .role { padding: 2px 6px; border-radius: 999px; border: 1px solid var(--border); }
+		.meta .role.admin { color: var(--success); border-color: rgba(85,214,156,0.35); }
+		.meta .role.user { color: var(--primary); border-color: rgba(77,163,255,0.35); }
+		.bubble { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: #11131a; box-shadow: 0 8px 18px rgba(0,0,0,0.18) inset; }
+		.msg.from-user .bubble { background: linear-gradient(180deg, #111625, #0f1220); border-color: #20243a; }
+		.msg.from-admin .bubble { background: linear-gradient(180deg, #0f1b17, #0d1513); border-color: #1f2f2a; }
+		.text { font-size: 15px; line-height: 1.5; }
+		.composer { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; }
+		.composer .input { width: 100%; }
+		.composer { grid-template-columns: 1fr auto auto auto; }
+		.composer .btn.icon { width: 44px; display: inline-flex; align-items: center; justify-content: center; padding: 0; font-size: 18px; border-color: #23283d; }
+		.shortcuts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+		.panels-section { margin-top: 14px; }
+		.panels-title { margin: 6px 2px 6px; font-weight: 600; color: #e6e9f3; }
+		.panels { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+		.cajero-section { margin-top: 16px; }
+		.cajero-title { margin: 6px 2px 6px; font-weight: 600; color: #e6e9f3; }
+		.cajero { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+		.shortcut-card, .panel-card, .danger-card {
+			width: 100%; min-width: 0; min-height: 64px;
+			display: inline-flex; align-items: center; justify-content: center;
+			border: 1px solid var(--border); border-radius: 10px;
+			background: linear-gradient(180deg, #262341, #191a2a);
+			color: #ede9ff; font-weight: 600; letter-spacing: .2px;
+			cursor: pointer; user-select: none;
+			transition: transform .12s ease, box-shadow .18s ease, border-color .18s ease;
+			border-color: rgba(156,134,255,0.35);
+		}
+		.shortcut-card:hover, .panel-card:hover, .danger-card:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(0,0,0,0.25); border-color: rgba(156,134,255,0.6); }
+		.danger-card {
+			background: linear-gradient(180deg, #3a1520, #1f0c12);
+			border-color: #b32b45;
+			color: #ffd7de;
+		}
+		.shortcut-card:active { transform: translateY(0); }
+		.image-msg { margin-top: 4px; }
+		.image-msg img { max-width: 100%; height: auto; border-radius: 10px; border: 1px solid var(--border); cursor: pointer; }
+		.audio-msg { margin-top: 4px; }
+		.audio-msg audio { 
+			width: 100%; 
+			outline: none; 
+			background: linear-gradient(180deg, #141726, #101320);
+			border: 1px solid var(--border);
+			border-radius: 8px;
+			padding: 4px 8px;
+			filter: invert(0.85) hue-rotate(200deg) saturate(0.7);
+		}
+
+		/* Preview de imagen antes de enviar */
+		.image-preview {
+			background: linear-gradient(180deg, #121424, #0f111a);
+			border: 1px solid var(--border);
+			border-radius: 12px;
+			padding: 10px;
+			display: flex;
+			gap: 12px;
+			align-items: center;
+		}
+		.image-preview img {
+			height: 64px;
+			width: 64px;
+			object-fit: cover;
+			border-radius: 8px;
+			border: 1px solid var(--border);
+		}
+		.image-preview .info { flex: 1; min-width: 0; }
+		.image-preview .name { font-size: 14px; color: #e6e6e6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+		.image-preview .actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 6px; }
+		.recording { background: linear-gradient(180deg, #2a1014, #1a0e12); border: 1px solid #3a1520; border-radius: 12px; padding: 10px; display: none; align-items: center; gap: 10px; }
+		.recording .dot { width: 10px; height: 10px; border-radius: 50%; background: #ff4d4d; box-shadow: 0 0 12px #ff4d4d; animation: blink 1s infinite; }
+		.recording .txt { color: #ffd7d7; font-size: 14px; }
+		.recording .time { color: #ffb1b1; font-size: 13px; margin-left: auto; }
+		@keyframes blink { 0%, 50% { opacity: 1 } 50.01%, 100% { opacity: .35 } }
+		#userListPanel { border: 1px solid var(--border); border-radius: 12px; padding: 10px; background: linear-gradient(180deg, #10131c, #0f1118); }
+		#userListPanel > div:first-child { color: #e6e9f3; }
+		#userList .btn { gap: 10px; display: flex; align-items: center; background: linear-gradient(180deg, #141726, #101320); border-color: #1f2234; }
+		#userList .btn:hover { border-color: #2b3050; box-shadow: 0 6px 16px rgba(0,0,0,0.25); }
+		.list-avatar { width: 18px; height: 18px; border-radius: 4px; object-fit: contain; filter: drop-shadow(0 0 4px rgba(255,190,11,0.25)); }
+
+		/* Dialogos modernos */
+		dialog { 
+			border: 1px solid var(--border); 
+			border-radius: 12px; 
+			background: linear-gradient(180deg, #10131c, #0f1116); 
+			box-shadow: 0 24px 70px var(--shadow);
+			color: var(--text);
+		}
+		dialog::backdrop { background: rgba(0,0,0,0.55); backdrop-filter: blur(2px); }
+		.sound-dialog { display:block; }
+		.sound-dialog .dialog-header { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px; }
+		.sound-dialog .dialog-title { font-weight:700; font-size:16px; }
+		.dialog-status { font-size:13px; color:#cfd6e6; margin-bottom:12px; }
+		.sound-dialog .dialog-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:10px; }
+
+		/* Input file estilizado */
+		#soundFileInput { 
+			width:100%; 
+			background: linear-gradient(180deg, #141726, #101320); 
+			border: 1px solid var(--border); 
+			border-radius: 10px; 
+			color: var(--muted); 
+			padding: 10px; 
+		}
+		#soundFileInput::file-selector-button {
+			border: 1px solid rgba(156,134,255,0.35);
+			background: linear-gradient(180deg, #262341, #191a2a);
+			color: #ede9ff;
+			padding: 8px 12px;
+			margin-right: 10px;
+			border-radius: 8px;
+			cursor: pointer;
+			transition: transform .12s ease, box-shadow .18s ease, border-color .18s ease;
+		}
+		#soundFileInput::file-selector-button:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(0,0,0,0.25); border-color: rgba(156,134,255,0.6); }
+
+		/* Slider de volumen */
+		#soundVolumeRange { 
+			width: 100%; 
+			height: 6px; 
+			appearance: none; 
+			background: linear-gradient(180deg, #141726, #101320);
+			border: 1px solid var(--border);
+			border-radius: 999px; 
+			outline: none; 
+		}
+		#soundVolumeRange::-webkit-slider-thumb { appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #7a63f1; border: 2px solid #b2a6ff33; box-shadow: 0 2px 8px rgba(122,99,241,0.45); cursor: pointer; }
+		#soundVolumeRange::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: #7a63f1; border: 2px solid #b2a6ff33; box-shadow: 0 2px 8px rgba(122,99,241,0.45); cursor: pointer; }
+
+		/* Horario cerrado (04:00–10:00 Buenos Aires) */
+		body.closed-hours { padding-top: 60px; }
+		#closedBanner {
+			position: fixed;
+			top: 0; left: 0; right: 0;
+			z-index: 9999;
+			background: linear-gradient(180deg, #3a1520, #1f0c12);
+			border-bottom: 1px solid #b32b45;
+			box-shadow: 0 10px 24px rgba(179,43,69,0.25);
+			color: #ffd7de;
+			display: none; /* se muestra por JS en horario cerrado */
+		}
+		#closedBanner .inner {
+			max-width: 1600px;
+			margin: 0 auto;
+			padding: 12px 24px;
+			display: flex;
+			align-items: center;
+			gap: 12px;
+			font-weight: 700;
+			letter-spacing: .2px;
+		}
+		#closedBanner .badge {
+			background: #5a1e2b;
+			border-color: #b32b45;
+			color: #ffd7de;
+		}
+
+		/* Overlay de pantalla completa para aviso inicial */
+		#closedFullOverlay {
+			position: fixed; inset: 0; z-index: 10000; display: none;
+			background: linear-gradient(180deg, rgba(10,11,16,0.85), rgba(10,11,16,0.92));
+			backdrop-filter: blur(2px);
+			align-items: center; justify-content: center; text-align: center;
+		}
+		#closedFullOverlay .cardy {
+			max-width: 720px; margin: 0 16px; padding: 22px 20px;
+			border-radius: 14px; border: 1px solid #b32b45;
+			background: linear-gradient(180deg, #3a1520, #1f0c12);
+			box-shadow: 0 24px 64px rgba(179,43,69,0.35);
+			position: relative; overflow: hidden;
+		}
+		#closedFullOverlay .stamp {
+			position: absolute; inset: -40px; display: grid; place-items: center; pointer-events: none;
+			font-size: 64px; font-weight: 900; letter-spacing: 4px; color: #ffb1c0; opacity: 0.08;
+			transform: rotate(-18deg);
+		}
+		#closedFullOverlay .title { font-size: 22px; font-weight: 800; color: #ffd7de; }
+		#closedFullOverlay .subtitle { margin-top: 6px; color: #ffb1c0; font-size: 15px; }
+		#closedFullOverlay .note { margin-top: 10px; color: #ffd7de; opacity: .95; font-size: 13px; }
+		#closedFullOverlay .actions { margin-top: 14px; display: flex; gap: 10px; justify-content: center; }
+		#closedDismissBtn {
+			border: 1px solid rgba(255,215,222,0.35);
+			background: linear-gradient(180deg, #262341, #191a2a);
+			color: #fff; padding: 10px 14px; border-radius: 10px; cursor: pointer;
+		}
+		.closed-overlay {
+			position: absolute; inset: 0;
+			display: none; /* visible en horario cerrado */
+			align-items: center; justify-content: center;
+			pointer-events: none; /* no bloquea el chat */
+			background: radial-gradient(800px 400px at 50% 20%, rgba(179,43,69,0.14), transparent);
+		}
+		.closed-overlay .panel {
+			pointer-events: none;
+			padding: 16px 18px;
+			border-radius: 12px;
+			border: 1px solid #b32b45;
+			background: linear-gradient(180deg, #3a1520, #1f0c12);
+			box-shadow: 0 16px 44px rgba(179,43,69,0.28);
+			max-width: 560px;
+			text-align: center;
+		}
+		.closed-overlay .panel .title { font-size: 18px; font-weight: 800; color: #ffd7de; margin-bottom: 6px; }
+		.closed-overlay .panel .desc { font-size: 14px; color: #ffb1c0; }
+	</style>
+</head>
+<body>
+	<!-- Aviso global de horario cerrado -->
+	<div id="closedBanner" role="status" aria-live="polite">
+		<div class="inner">
+			<span style="font-size:18px">⏰</span>
+			<div style="flex:1">
+				<strong>Fuera de horario de atención</strong>
+				<span style="opacity:.9">· 04:00–10:00 (Buenos Aires)</span>
+				<div style="font-weight:500;color:#ffd7de;opacity:.9; font-size:13px;">El administrador no está activo ahora. Podés dejar tu mensaje; responderemos a partir de las 10:00.</div>
+			</div>
+			<span class="badge" style="font-weight:700">CERRADO</span>
+		</div>
+	</div>
+
+	<!-- Overlay de pantalla completa (solo se muestra inicialmente en horario cerrado para usuarios) -->
+	<div id="closedFullOverlay" aria-modal="true" role="dialog">
+		<div class="cardy">
+			<div class="stamp">CERRADO</div>
+			<div class="title">Fuera de horario</div>
+			<div class="subtitle">El administrador no está activo entre <strong>04:00</strong> y <strong>10:00</strong> (Buenos Aires).</div>
+			<div class="note">Podés dejar tu mensaje con tranquilidad; lo veremos a partir de las 10:00. Gracias por tu paciencia.</div>
+			<div class="actions">
+				<button id="closedDismissBtn" type="button">Entendido</button>
+			</div>
+		</div>
+	</div>
+	<div class="container">
+		<div class="card" id="loginCard">
+			<div class="header">
+				<div class="title"><img src="assets/logo.png" alt="Logo" class="badge-logo" style="margin-right:8px"/>Pone tus datos para chatear</div>
+				<div class="badge">RED ZENON <img src="assets/logo.png" alt="Logo" class="badge-logo" /> LINEA 2</div>
+			</div>
+			<div class="content" style="max-width: 680px;">
+				<div class="login-grid">
+					<div class="field">
+						<label class="label" for="username">Usuario</label>
+						<input class="input" id="username" type="text" placeholder="Tu usuario" />
+					</div>
+					<div class="field">
+						<label class="label" for="password">Contraseña</label>
+						<input class="input" id="password" type="password" placeholder="Tu contraseña" />
+					</div>
+					<div class="error" id="loginError"></div>
+					<div class="actions">
+						<button class="btn primary" id="loginBtn" type="button">Ingresar</button>
+					</div>
+					<div class="label">En usuario y contraseña siempre van tus datos de juego, no te confundas con tu nombre de usuario y tu contraseña no te la olvides/cambies</div>
+				</div>
+			</div>
+		</div>
+			<div id="chatRow" class="chat-row" style="display:none; gap: 18px; align-items: stretch;">
+			<div class="card" id="chatCard" style="display:none;flex:1;">
+				<div class="header">
+					<div class="title"><img src="assets/logo.png" alt="Logo" class="badge-logo" style="margin-right:8px"/>Cajeros linea 2 (yesi, lauti, diego)</div>
+					<div>
+						<span class="badge" id="roleBadge">Usuario</span>
+						<span class="badge" id="nameBadge">-</span>
+
+						<button class="btn" id="logoutBtn" type="button" title="Cerrar sesión">Salir</button>
+					</div>
+				</div>
+				<div class="content" style="display: flex; gap: 18px;">
+					<div id="userListPanel" style="min-width:220px;max-width:260px;display:none;">
+						<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;">
+							<div style="font-size:15px;font-weight:600;">Usuarios</div>
+							<div style="flex:1;display:flex;gap:6px;align-items:center;justify-content:flex-end;">
+								<span title="Buscar" style="opacity:.8">🔎</span>
+								<input id="userSearch" type="text" placeholder="Buscar" class="input" style="height:30px;padding:6px 10px;max-width:140px;" />
+							</div>
+						</div>
+						<div id="userList" style="display:flex;flex-direction:column;gap:6px;"></div>
+					</div>
+					<!-- Chat privado -->
+					<div class="chat-wrapper" style="flex:1;">
+						<div class="messages" id="messages"></div>
+						<div class="recording" id="recordingBar">
+							<div class="dot"></div>
+							<div class="txt">Mantené presionado para grabar</div>
+							<div class="time" id="recordingTime">00:00</div>
+						</div>
+						<div class="image-preview" id="imagePreview" style="display:none">
+							<img id="imagePreviewThumb" alt="preview" loading="lazy" decoding="async" />
+							<div class="info">
+								<div class="name" id="imagePreviewName">imagen</div>
+								<div class="actions">
+									<button class="btn" id="cancelImageBtn" type="button">Cancelar</button>
+									<button class="btn primary" id="confirmImageBtn" type="button">Enviar imagen</button>
+								</div>
+							</div>
+						</div>
+						<div class="composer">
+							<input class="input" id="messageInput" type="text" placeholder="Escribe un mensaje y presiona Enter..." />
+							<button class="btn icon" id="audioBtn" type="button" title="Mantener para grabar">🎤</button>
+							<button class="btn icon" id="imageBtn" type="button" title="Enviar imagen">📷</button>
+							<button class="btn primary" id="sendBtn" type="button">Enviar</button>
+							<input type="file" id="imageInput" accept="image/*" style="display:none" />
+						</div>
+					</div>
+					<!-- Overlay informativo de horario cerrado -->
+					<div id="closedOverlay" class="closed-overlay">
+						<div class="panel">
+							<div class="title">⏰ Fuera de horario</div>
+							<div class="desc">El administrador no está activo entre <strong>04:00</strong> y <strong>10:00</strong> (Buenos Aires). Podés dejar tu mensaje; responderemos a partir de las 10:00.</div>
+						</div>
+					</div>
+				</div>
+			</div>
+			<div class="card" id="shortcutsCard" style="display:none;min-width:260px;max-width:300px;">
+				<div class="header">
+					<div class="title">Accesos rápidos</div>
+				</div>
+				<div class="content">
+					<div class="shortcuts">
+						<div class="shortcut-card" id="shortcutGanamos" title="Enviar: https://www.ganamos.pw/">ganamos</div>
+						<div class="shortcut-card" id="shortcutZeus" title="Enviar: https://www.casinozeus26.com/">ZEUS</div>
+						<div class="shortcut-card" id="shortcutBet30" title="Enviar: https://www.bet30.gold/">BET30</div>
+						<div class="shortcut-card" id="shortcutCamel" title="Enviar: https://www.camelbet24.com/">CAMEL</div>
+						<div class="shortcut-card" id="shortcutGnaCsa" title="Enviar: http://ganaencasa24.com/">gna.csa</div>
+						<div class="shortcut-card" id="shortcutCelu" title="Enviar: https://www.celuapuestas24.ws/">CELU</div>
+						<div class="shortcut-card" id="shortcutFortu" title="Enviar: http://fortubet24.ws/">FORTU</div>
+						<div class="shortcut-card" id="shortcutArgen" title="Enviar: https://argenbet.net/">ARGEN</div>
+						<div class="shortcut-card" id="shortcutPoseidon" title="Enviar: https://granposeidon.eu/">poseidon</div>
+					</div>
+
+					<div class="panels-section">
+						<div class="panels-title">Paneles</div>
+						<div class="panels">
+							<div class="panel-card" id="panelGnmos" title="https://bo.ganamos.pw/login">GNMOS</div>
+							<div class="panel-card" id="panelArgen" title="https://admin.argenbet.net/users/all">ARGEN</div>
+							<div class="panel-card" id="panelG32" title="https://bo.casinoenvivo.club/login">G32</div>
+						</div>
+					</div>
+					<div class="cajero-section">
+						<div class="cajero-title">Cajero</div>
+						<div class="cajero">
+							<div class="danger-card" id="btnCajeroClear" title="Borrar todos los mensajes (texto, imágenes, audios) conservando los chats">BORRAR</div>
+							<div class="panel-card" id="btnCajeroSound" title="Elegir sonido de notificaciones personalizado">NOTIFI.</div>
+							<div class="panel-card" id="btnCajeroSupport" title="En caso de tener un problema, contactarse al siguiente número de whatsapp: +54 1164147048">SOPORTE</div>
+						</div>
+					</div>
+				</div>
+			</div>
+			</div>
+	</div>
+	<dialog id="imgDialog">
+		<img id="imgDialogImg" alt="imagen" loading="lazy" decoding="async" />
+	</dialog>
+
+	<!-- Configuración de sonido de notificaciones (movido fuera para mantener limpio el layout) -->
+	<dialog id="soundDialog">
+		<form method="dialog" style="min-width:280px;max-width:460px;padding:16px;" class="sound-dialog">
+			<div class="dialog-header">
+				<div class="dialog-title">Sonido de notificaciones</div>
+				<button id="soundCloseBtn" class="btn" value="close" type="submit">Cerrar</button>
+			</div>
+			<div id="soundStatus" class="dialog-status">Actual: predeterminado</div>
+			<div class="range-wrap" style="margin:8px 0 12px;">
+				<label for="soundVolumeRange" class="label" style="display:block;margin-bottom:6px;">Volumen: <span id="soundVolumeValue">100%</span></label>
+				<input id="soundVolumeRange" type="range" min="0" max="100" value="100" />
+			</div>
+			<input id="soundFileInput" type="file" accept="audio/*" style="width:100%;margin-bottom:10px;" />
+			<div class="dialog-actions">
+				<button type="button" id="soundPermissionBtn" class="btn">Forzar permisos</button>
+				<button type="button" id="soundTestBtn" class="btn">Probar</button>
+				<button type="button" id="soundSaveBtn" class="btn primary">Guardar</button>
+				<button type="button" id="soundResetBtn" class="btn">Quitar personalizado</button>
+			</div>
+		</form>
+	</dialog>
+
+	<script type="module">
+	import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js';
+	import { getDatabase, ref, push, serverTimestamp, onChildAdded, query, limitToLast, onValue, off, set, remove, get, update, orderByChild, endAt } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js';
+	import { getFirestore, collection, doc, addDoc, setDoc, deleteDoc, serverTimestamp as fsServerTimestamp, onSnapshot, where, query as fsQuery, getDocs, writeBatch, orderBy, limit as fsLimit, startAfter } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
+
+		const firebaseConfig = {
+			apiKey: "AIzaSyB3Fjr_lu4mRECh_QCbF1thuVfTYkf42eQ",
+			authDomain: "chisspero.firebaseapp.com",
+			projectId: "chisspero",
+			storageBucket: "chisspero.firebasestorage.app",
+			messagingSenderId: "178897843769",
+			appId: "1:178897843769:web:4ec8db86e6dd045b16ffe8",
+			measurementId: "G-7H53CKR4T6",
+			databaseURL: "https://chisspero-default-rtdb.firebaseio.com"
+		};
+
+		const app = initializeApp(firebaseConfig);
+		const db = getDatabase(app);
+		const fs = getFirestore(app);
+		const loginCard = document.getElementById('loginCard');
+		const chatRow = document.getElementById('chatRow');
+		const chatCard = document.getElementById('chatCard');
+		const usernameEl = document.getElementById('username');
+		const passwordEl = document.getElementById('password');
+		const loginBtn = document.getElementById('loginBtn');
+		const loginError = document.getElementById('loginError');
+		const roleBadge = document.getElementById('roleBadge');
+		const nameBadge = document.getElementById('nameBadge');
+		const messagesEl = document.getElementById('messages');
+		const shortcutsCard = document.getElementById('shortcutsCard');
+		const shortcutGanamos = document.getElementById('shortcutGanamos');
+		const shortcutZeus = document.getElementById('shortcutZeus');
+		const shortcutBet30 = document.getElementById('shortcutBet30');
+		const shortcutCamel = document.getElementById('shortcutCamel');
+		const shortcutGnaCsa = document.getElementById('shortcutGnaCsa');
+		const shortcutCelu = document.getElementById('shortcutCelu');
+		const shortcutFortu = document.getElementById('shortcutFortu');
+		const shortcutArgen = document.getElementById('shortcutArgen');
+		const shortcutPoseidon = document.getElementById('shortcutPoseidon');
+		const panelG32 = document.getElementById('panelG32');
+		const panelGnmos = document.getElementById('panelGnmos');
+		const panelArgen = document.getElementById('panelArgen');
+		const btnCajeroClear = document.getElementById('btnCajeroClear');
+		const btnCajeroSound = document.getElementById('btnCajeroSound');
+		const btnCajeroSupport = document.getElementById('btnCajeroSupport');
+		const soundDialog = document.getElementById('soundDialog');
+		const soundFileInput = document.getElementById('soundFileInput');
+		const soundStatus = document.getElementById('soundStatus');
+		const soundPermissionBtn = document.getElementById('soundPermissionBtn');
+		const soundTestBtn = document.getElementById('soundTestBtn');
+		const soundSaveBtn = document.getElementById('soundSaveBtn');
+		const soundResetBtn = document.getElementById('soundResetBtn');
+		const soundVolumeRange = document.getElementById('soundVolumeRange');
+		const soundVolumeValue = document.getElementById('soundVolumeValue');
+		const messageInput = document.getElementById('messageInput');
+		const sendBtn = document.getElementById('sendBtn');
+		const imageBtn = document.getElementById('imageBtn');
+		const audioBtn = document.getElementById('audioBtn');
+		const imageInput = document.getElementById('imageInput');
+		const logoutBtn = document.getElementById('logoutBtn');
+		const recordingBar = document.getElementById('recordingBar');
+		const recordingTimeEl = document.getElementById('recordingTime');
+		const imagePreview = document.getElementById('imagePreview');
+		const imagePreviewThumb = document.getElementById('imagePreviewThumb');
+		const imagePreviewName = document.getElementById('imagePreviewName');
+		const confirmImageBtn = document.getElementById('confirmImageBtn');
+		const cancelImageBtn = document.getElementById('cancelImageBtn');
+		const imgDialog = document.getElementById('imgDialog');
+		const imgDialogImg = document.getElementById('imgDialogImg');
+		// Avisos de horario
+		const closedBanner = document.getElementById('closedBanner');
+		const closedOverlay = document.getElementById('closedOverlay');
+		const closedFullOverlay = document.getElementById('closedFullOverlay');
+		const closedDismissBtn = document.getElementById('closedDismissBtn');
+
+		let pendingImageFile = null;
+		let uploadingImage = false;
+		let mediaRecorder = null;
+		let audioChunks = [];
+		let recordingTimer = null;
+		let recordingStartedAt = 0;
+
+		const USER1 = 'fundador666';
+		const USER2 = 'linea2bet';
+		const REALTIME_RETENTION_MS = 1000 * 60 * 60; // Mantener solo la última 1 hora en Realtime Database
+		const CLEANUP_INTERVAL_MS = 1000 * 60 * 5; // Revisar la limpieza cada 5 minutos
+		const CLEANUP_BATCH_LIMIT = 200; // Limitar cantidad de mensajes eliminados por ciclo para evitar picos
+		const FIRESTORE_HISTORY_LIMIT = 500; // Cantidad máxima de mensajes persistidos a recuperar por chat
+		const INACTIVITY_TIMEOUT_MS = 1000 * 60 * 5; // 5 minutos de inactividad (solo usuarios)
+		const NEW_MESSAGE_MAX_AGE_MS = 10000; // Considerar "nuevo" todo mensaje con menos de 10s
+		const SUPPORT_WHATSAPP_MESSAGE = 'En caso de tener un problema, contactarse al número de whatsapp: +54 1164147048';
+
+	let currentUser = { name: null, role: 'user' };
+	let selectedUserKey = null;
+	let chatListener = null;
+	let conversations = {};
+	let userAliases = {};
+	let conversationMeta = {};
+	let unsubscribeConversations = null;
+	let unsubscribeAliases = null;
+	let unsubscribeConversationsMeta = null;
+	let cleanupTimerId = null;
+	let unsubscribeHistoryFS = null;
+	let renderedMessageIds = new Set();
+	let messagesScrollHandler = null;
+	let inactivityTimerId = null;
+	let inactivityHandlersBound = false;
+	let notificationSound = null; // buffer por defecto (Web Audio)
+	let customNotificationDataUrl = null; // data URL del sonido personalizado
+	let customNotificationAudio = null; // elemento de audio reutilizable
+	let pendingCustomSoundDataUrl = null; // data URL cargado en el diálogo, aún no guardado
+	let unreadCounts = {}; // { userKey: count }
+	let lastMessageTimestamps = {}; // Para detectar mensajes nuevos
+	let notificationsEnabled = false;
+	let audioContextSingleton = null;
+	let knownUserKeys = new Set();
+	let userListHydrated = false;
+	let isLoggedInFlag = false;
+	let serverTimeOffsetMs = 0; // delta de reloj con el servidor RTDB
+
+	// Sincronizar offset de reloj con RTDB para usar tiempos consistentes
+	onValue(ref(db, '.info/serverTimeOffset'), (snap) => {
+		try { serverTimeOffsetMs = Number(snap.val() || 0); } catch { serverTimeOffsetMs = 0; }
+	}, { onlyOnce: false });
+
+	function nowMs(){ return Date.now() + (serverTimeOffsetMs || 0); }
+
+	// --- Horario cerrado: 04:00–10:00 (Buenos Aires) ---
+	function isClosedHoursBuenosAires(date = new Date()) {
+		try {
+			const parts = new Intl.DateTimeFormat('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', hour12: false, hour: 'numeric' }).formatToParts(date);
+			const hourStr = parts.find(p => p.type === 'hour')?.value || '0';
+			const hour = parseInt(hourStr, 10);
+			return hour >= 4 && hour < 10; // 04:00 inclusive hasta 09:59
+		} catch {
+			// Si falla Intl, no bloquear: considerar abierto
+			return false;
+		}
+	}
+
+	function isAdminRole() {
+		const r = (currentUser?.role || '').toLowerCase();
+		return r === 'admin' || r === 'cajero';
+	}
+
+	function updateClosedStateUI() {
+		const closed = isClosedHoursBuenosAires();
+		const admin = isAdminRole();
+		if (closedBanner) closedBanner.style.display = closed ? '' : 'none';
+		if (closedOverlay) closedOverlay.style.display = (closed && !admin && isLoggedInFlag) ? 'flex' : 'none';
+		// Full overlay solo cuando el usuario ya está logueado (para no bloquear el login) y no es admin
+		const dismissed = sessionStorage.getItem('closedOverlayDismissed') === '1';
+		if (closedFullOverlay) {
+			closedFullOverlay.style.display = (closed && !admin && isLoggedInFlag && !dismissed) ? 'flex' : 'none';
+		}
+		try {
+			document.body.classList.toggle('closed-hours', closed);
+		} catch {}
+	}
+
+	function setView(isLoggedIn) {
+		isLoggedInFlag = !!isLoggedIn;
+		loginCard.style.display = isLoggedIn ? 'none' : '';
+		if (chatRow) chatRow.style.display = isLoggedIn ? 'flex' : 'none';
+		chatCard.style.display = isLoggedIn ? '' : 'none';
+		const isAdmin = currentUser.role === 'admin';
+		document.getElementById('userListPanel').style.display = (isLoggedIn && isAdmin) ? '' : 'none';
+		if (shortcutsCard) shortcutsCard.style.display = (isLoggedIn && isAdmin) ? '' : 'none';
+
+		if (isLoggedIn) {
+			roleBadge.textContent = isAdmin ? 'Administrador' : 'Usuario';
+			messageInput.value = '';
+			messageInput.focus();
+			if (isAdmin) {
+				selectedUserKey = selectedUserKey || null;
+				ensureAdminSubscriptions();
+				startCleanupTimer();
+				// Solicitar permisos de notificaciones para el admin
+				requestNotificationPermission();
+				stopInactivityWatch && stopInactivityWatch();
+			} else {
+				teardownAdminSubscriptions();
+				stopCleanupTimer();
+				selectedUserKey = currentUser.name;
+				loadChat(selectedUserKey);
+				startInactivityWatch && startInactivityWatch();
+			}
+		} else {
+			teardownAdminSubscriptions();
+			stopCleanupTimer();
+			usernameEl.focus();
+			selectedUserKey = null;
+			clearChat();
+			clearUserList();
+			stopInactivityWatch && stopInactivityWatch();
+		}
+
+		updateActiveChatHeader();
+		updateClosedStateUI();
+	}
+
+	function stopCleanupTimer() {
+		if (cleanupTimerId) {
+			clearInterval(cleanupTimerId);
+			cleanupTimerId = null;
+		}
+	}
+		function openImageDialog(src) {
+			if (!imgDialog || !imgDialogImg) return;
+			imgDialogImg.src = src;
+			try { imgDialog.showModal(); } catch { imgDialog.open = true; }
+		}
+		if (imgDialog) {
+			imgDialog.addEventListener('click', (e) => {
+				if (e.target === imgDialog) {
+					try { imgDialog.close(); } catch { imgDialog.open = false; }
+				}
+			});
+			imgDialog.addEventListener('contextmenu', (e) => {
+				e.preventDefault();
+				try { imgDialog.close(); } catch { imgDialog.open = false; }
+			});
+		}
+
+	function bindInactivityEvents() {
+		if (inactivityHandlersBound) return;
+		const reset = () => resetInactivityTimer();
+		window.addEventListener('mousemove', reset);
+		window.addEventListener('keydown', reset);
+		window.addEventListener('click', reset);
+		window.addEventListener('touchstart', reset, { passive: true });
+		document.addEventListener('visibilitychange', () => {
+			if (document.visibilityState === 'visible') resetInactivityTimer();
+		});
+		inactivityHandlersBound = true;
+	}
+
+	function startInactivityWatch() {
+		if (currentUser.role === 'admin') return;
+		bindInactivityEvents();
+		resetInactivityTimer();
+	}
+
+	function stopInactivityWatch() {
+		if (inactivityTimerId) {
+			clearTimeout(inactivityTimerId);
+			inactivityTimerId = null;
+		}
+	}
+
+	function resetInactivityTimer() {
+		if (currentUser.role === 'admin') return;
+		if (inactivityTimerId) clearTimeout(inactivityTimerId);
+		inactivityTimerId = setTimeout(() => {
+			try { messageInput.blur(); } catch {}
+			setView(false); // volver al login
+			const el = document.getElementById('loginError');
+			if (el) el.textContent = 'Sesión cerrada por inactividad (5 minutos).';
+		}, INACTIVITY_TIMEOUT_MS);
+	}
+	async function runRealtimeCleanup() {
+		if (currentUser.role !== 'admin') return;
+		const conversationsSnapshot = conversations || {};
+		const retentionThreshold = Date.now() - REALTIME_RETENTION_MS;
+		let removals = [];
+		let removedCount = 0;
+
+		for (const [chatKey, messages] of Object.entries(conversationsSnapshot)) {
+			if (removedCount >= CLEANUP_BATCH_LIMIT) break;
+			for (const [messageKey, message] of Object.entries(messages || {})) {
+				if (removedCount >= CLEANUP_BATCH_LIMIT) break;
+				const ts = (message && typeof message.ts === 'number') ? message.ts : null;
+				if (!ts || ts >= retentionThreshold) continue;
+				const messageRef = ref(db, `chat/conversaciones/${chatKey}/${messageKey}`);
+				removals.push(remove(messageRef).catch((err) => console.warn('Error al limpiar mensaje', err)));
+				removedCount += 1;
+			}
+		}
+		if (removals.length) {
+			await Promise.allSettled(removals);
+		}
+	}
+
+	function startCleanupTimer() {
+		if (cleanupTimerId || currentUser.role !== 'admin') return;
+		cleanupTimerId = setInterval(() => {
+			runRealtimeCleanup().catch((err) => console.warn('Error en limpieza periódica', err));
+		}, CLEANUP_INTERVAL_MS);
+		runRealtimeCleanup().catch((err) => console.warn('Error en limpieza inicial', err));
+	}
+
+	async function runCajeroClear() {
+		if (currentUser.role !== 'admin') return { deleted: 0 };
+		try {
+			let convs = conversations && Object.keys(conversations).length
+				? conversations
+				: ((await get(ref(db, 'chat/conversaciones'))).val() || {});
+
+			let updates = {};
+			let deletedRTDB = 0;
+			const FLUSH_EVERY = 500;
+
+			for (const [userKey, msgs] of Object.entries(convs)) {
+				for (const msgKey of Object.keys(msgs || {})) {
+					updates[`chat/conversaciones/${userKey}/${msgKey}`] = null;
+					deletedRTDB += 1;
+					if (deletedRTDB % FLUSH_EVERY === 0) {
+						await update(ref(db), updates).catch(err => console.warn('Error aplicando lote de borrado', err));
+						updates = {};
+					}
+				}
+			}
+			if (Object.keys(updates).length) {
+				await update(ref(db), updates).catch(err => console.warn('Error aplicando lote final de borrado', err));
+			}
+
+			// Ajustar metadata básica en Firestore para que no muestre previews viejos
+			try {
+				for (const userKey of Object.keys(convs)) {
+					await setDoc(doc(fs, 'conversaciones', userKey), {
+						lastMessageType: null,
+						lastMessagePreview: '',
+						lastMessageTs: null,
+						updatedAt: fsServerTimestamp()
+					}, { merge: true });
+				}
+			} catch (err) {
+				console.warn('No se pudo resetear metadata de conversaciones en Firestore:', err);
+			}
+
+			// Borrar todos los documentos de Firestore en 'mensajes' (historial)
+			let deletedFS = 0;
+			try {
+				const colRef = collection(fs, 'mensajes');
+				let lastDocSnap = null;
+				const PAGE = 300;
+				for (;;) {
+					let q = fsQuery(colRef, orderBy('__name__'), fsLimit(PAGE));
+					if (lastDocSnap) q = fsQuery(colRef, orderBy('__name__'), startAfter(lastDocSnap), fsLimit(PAGE));
+					const snap = await getDocs(q);
+					if (snap.empty) break;
+					const batch = writeBatch(fs);
+					snap.docs.forEach(d => batch.delete(d.ref));
+					await batch.commit();
+					deletedFS += snap.size;
+					lastDocSnap = snap.docs[snap.docs.length - 1];
+				}
+			} catch (err) {
+				console.warn('No se pudo borrar historial de la base de datos (mensajes):', err);
+			}
+			if (selectedUserKey) {
+				clearChat();
+				loadChat(selectedUserKey);
+			} else {
+				renderUserList && renderUserList();
+			}
+
+			return { deletedRTDB, deletedFS };
+		} catch (err) {
+			console.error('Error en Cajero (borrado forzado):', err);
+			throw err;
+		}
+	}
+
+		// ========== SISTEMA DE NOTIFICACIONES ==========
+		function getAudioContext() {
+			try {
+				const Ctor = window.AudioContext || window.webkitAudioContext;
+				if (!Ctor) return null;
+				if (!audioContextSingleton || audioContextSingleton.state === 'closed') {
+					audioContextSingleton = new Ctor();
+				}
+				return audioContextSingleton;
+			} catch (err) {
+				console.warn('No se pudo inicializar AudioContext:', err);
+				return null;
+			}
+		}
+
+		function createNotificationSound() {
+			const audioContext = getAudioContext();
+			if (!audioContext) return null;
+			if (notificationSound) return notificationSound;
+			const duration = 0.3;
+			const sampleRate = audioContext.sampleRate;
+			const buffer = audioContext.createBuffer(1, duration * sampleRate, sampleRate);
+			const data = buffer.getChannelData(0);
+			for (let i = 0; i < buffer.length; i++) {
+				const t = i / sampleRate;
+				const freq1 = 800; // Primera nota
+				const freq2 = 1000; // Segunda nota
+				const envelope = Math.exp(-3 * t);
+				if (t < duration / 2) {
+					data[i] = Math.sin(2 * Math.PI * freq1 * t) * envelope * 0.3;
+				} else {
+					data[i] = Math.sin(2 * Math.PI * freq2 * t) * envelope * 0.3;
+				}
+			}
+			notificationSound = buffer;
+			return notificationSound;
+		}
+		function playNotificationSound() {
+			// Si hay sonido personalizado, usarlo
+			if (customNotificationDataUrl) {
+				try {
+					if (!customNotificationAudio) {
+						customNotificationAudio = new Audio(customNotificationDataUrl);
+						customNotificationAudio.preload = 'auto';
+					}
+					// Reiniciar y reproducir
+					try { customNotificationAudio.currentTime = 0; } catch {}
+					// Aplicar volumen guardado
+					try { customNotificationAudio.volume = getSavedVolume(); } catch {}
+					customNotificationAudio.play().catch(() => {
+						// Si falla por política del navegador, caer al beep
+						playDefaultBeep();
+					});
+					return;
+				} catch (err) {
+					console.warn('No se pudo reproducir sonido personalizado, usando beep:', err);
+				}
+			}
+			playDefaultBeep();
+		}
+
+		function playDefaultBeep() {
+			try {
+				const audioContext = getAudioContext();
+				if (!audioContext) return;
+				if (audioContext.state === 'suspended') {
+					audioContext.resume().catch(() => {});
+				}
+				const buffer = createNotificationSound();
+				if (!buffer) return;
+				const source = audioContext.createBufferSource();
+				source.buffer = buffer;
+				const gain = audioContext.createGain();
+				gain.gain.value = getSavedGain();
+				source.connect(gain);
+				gain.connect(audioContext.destination);
+				source.start(0);
+			} catch (err) {
+				console.warn('No se pudo reproducir el beep:', err);
+			}
+		}
+
+		function getSavedVolume() {
+			try {
+				const v = localStorage.getItem('notificationVolume');
+				const num = v == null ? 1 : Math.max(0, Math.min(1, Number(v)));
+				return isNaN(num) ? 1 : num;
+			} catch { return 1; }
+		}
+
+		function getSavedGain() {
+			return getSavedVolume();
+		}
+
+		function loadCustomNotificationSoundFromStorage() {
+			try {
+				const v = localStorage.getItem('customNotificationSound');
+				customNotificationDataUrl = v || null;
+				customNotificationAudio = v ? new Audio(v) : null;
+				if (customNotificationAudio) customNotificationAudio.preload = 'auto';
+			} catch {}
+		}
+
+		function setCustomNotificationSound(dataUrl) {
+			customNotificationDataUrl = dataUrl;
+			try { localStorage.setItem('customNotificationSound', dataUrl); } catch {}
+			customNotificationAudio = new Audio(dataUrl);
+			customNotificationAudio.preload = 'auto';
+		}
+
+		function clearCustomNotificationSound() {
+			customNotificationDataUrl = null;
+			customNotificationAudio = null;
+			try { localStorage.removeItem('customNotificationSound'); } catch {}
+		}
+
+		// Solicitar permisos de notificaciones
+		async function requestNotificationPermission(opts = {}) {
+			const force = !!(opts && opts.force);
+			if (!('Notification' in window)) {
+				console.warn('Este navegador no soporta notificaciones');
+				notificationsEnabled = false;
+				return false;
+			}
+			if (Notification.permission === 'granted') {
+				notificationsEnabled = true;
+				updateSoundStatusLabel && updateSoundStatusLabel();
+				return true;
+			}
+			if (Notification.permission === 'denied' && !force) {
+				notificationsEnabled = false;
+				updateSoundStatusLabel && updateSoundStatusLabel();
+				return false;
+			}
+			try {
+				const permission = await Notification.requestPermission();
+				notificationsEnabled = permission === 'granted';
+				updateSoundStatusLabel && updateSoundStatusLabel();
+				return notificationsEnabled;
+			} catch (err) {
+				console.warn('No se pudo solicitar permiso de notificaciones:', err);
+				notificationsEnabled = Notification.permission === 'granted';
+				updateSoundStatusLabel && updateSoundStatusLabel();
+				return notificationsEnabled;
+			}
+			return false;
+		}
+
+		// Mostrar notificación Push
+		function showNotification(title, body, icon = 'assets/logo.png') {
+			if (!notificationsEnabled || Notification.permission !== 'granted') {
+				return;
+			}
+			try {
+				const notification = new Notification(title, {
+					body: body,
+					icon: icon,
+					badge: icon,
+					tag: 'mensaje-nuevo',
+					requireInteraction: false,
+					silent: false
+				});
+				setTimeout(() => notification.close(), 5000);
+				notification.onclick = () => {
+					window.focus();
+					notification.close();
+				};
+			} catch (err) {
+				console.warn('Error al mostrar notificación:', err);
+			}
+		}
+		function getLatestMessageSummary(userKey) {
+			if (!userKey) return '';
+			const meta = conversationMeta[userKey];
+			if (meta && meta.lastMessagePreview) {
+				return meta.lastMessagePreview;
+			}
+			const conv = conversations[userKey];
+			if (conv) {
+				const entries = Object.values(conv);
+				if (entries.length) {
+					let latest = null;
+					for (const item of entries) {
+						if (!item) continue;
+						const ts = typeof item.ts === 'number' ? item.ts : (typeof item.timestamp === 'number' ? item.timestamp : 0);
+						if (!latest || ts > (typeof latest.ts === 'number' ? latest.ts : (typeof latest.timestamp === 'number' ? latest.timestamp : 0))) {
+							latest = item;
+						}}
+					if (latest) {
+						if (latest.text) {
+							return latest.text.length > 50 ? latest.text.slice(0, 50) + '...' : latest.text;
+						}
+						if (latest.imageDataUrl || latest.imageUrl) return '📷 Imagen';
+						if (latest.audioDataUrl) return '🎤 Audio';
+					}
+				}}
+			return '';
+		}
+
+		function notifyNewConversation(userKey) {
+			if (currentUser.role !== 'admin') return;
+			if (!userListHydrated) return;
+			if (!userKey || userKey === selectedUserKey) return;
+			const displayName = getDisplayName(userKey) || userKey;
+			const body = getLatestMessageSummary(userKey) || 'Nuevo chat disponible';
+			playNotificationSound();
+			showNotification(`💬 ${displayName}`, body);
+		}
+		function incrementUnread(userKey) {
+			if (!userKey || userKey === selectedUserKey) return;
+			unreadCounts[userKey] = (unreadCounts[userKey] || 0) + 1;
+			renderUserList();
+		}
+		function clearUnread(userKey) {
+			if (unreadCounts[userKey]) {
+				delete unreadCounts[userKey];
+				renderUserList();
+			}
+		}
+
+		// Detectar mensajes nuevos y notificar (solo para admin)
+		function handleNewMessage(userKey, message) {
+			if (currentUser.role !== 'admin') return;
+			if (!message || message.role === 'admin') return;
+			const lastTS = lastMessageTimestamps[userKey] || 0;
+			const msgTS = typeof message.ts === 'number' ? message.ts : (typeof message.timestamp === 'number' ? message.timestamp : Date.now());
+			// Solo notificar si es un mensaje nuevo (posterior al último conocido)
+			if (msgTS > lastTS) {
+				lastMessageTimestamps[userKey] = msgTS;
+				// Si el mensaje es realmente nuevo (menos de NEW_MESSAGE_MAX_AGE_MS)
+				const age = Date.now() - msgTS;
+				if (age <= NEW_MESSAGE_MAX_AGE_MS) {
+					playNotificationSound();
+					if (userKey !== selectedUserKey) {
+						incrementUnread(userKey);
+					}
+					// Mostrar notificación Push
+					const userName = getDisplayName(userKey) || userKey;
+					let notifBody = '';
+					if (message.text) {
+						notifBody = message.text.length > 50 ? message.text.substring(0, 50) + '...' : message.text;
+					} else if (message.imageDataUrl) {
+						notifBody = '📷 Imagen';
+					} else if (message.audioDataUrl) {
+						notifBody = '🎤 Audio';
+					} else {
+						notifBody = 'Mensaje nuevo';
+					}
+					showNotification(`💬 ${userName}`, notifBody);
+				} else if (userKey !== selectedUserKey) {
+					if (!unreadCounts[userKey]) {
+						unreadCounts[userKey] = 1;
+						renderUserList();
+					}
+				}
+			}
+		}
+
+			function getDisplayName(userKey) {
+				if (!userKey) return userKey;
+				return userAliases[userKey] || userAliases[(userKey.toLowerCase ? userKey.toLowerCase() : userKey)] || userKey;
+			}			function updateActiveChatHeader() {
+					if (selectedUserKey) {
+						nameBadge.textContent = getDisplayName(selectedUserKey) || selectedUserKey || '-';
+					} else if (currentUser.role === 'admin') {
+						nameBadge.textContent = '-';
+					} else {
+						nameBadge.textContent = currentUser.name || '-';
+					}
+				}
+
+				function appendMessage(msg) {
+				const wrap = document.createElement('div');
+				wrap.className = 'msg ' + (msg.role === 'admin' ? 'from-admin' : 'from-user');
+				const meta = document.createElement('div');
+				meta.className = 'meta';
+				const name = document.createElement('span');
+				name.textContent = msg.sender || 'Anónimo';
+				const role = document.createElement('span');
+				role.className = 'role ' + (msg.role === 'admin' ? 'admin' : 'user');
+				role.textContent = msg.role === 'admin' ? 'Admin' : 'Usuario';
+				const time = document.createElement('span');
+				const d = msg.ts ? new Date(msg.ts) : new Date();
+				time.textContent = d.toLocaleString();
+				meta.appendChild(name);
+				meta.appendChild(role);
+				meta.appendChild(time);
+				wrap.appendChild(meta);
+				if (msg.type === 'image' && (msg.imageUrl || msg.imageDataUrl)) {
+					const imgWrap = document.createElement('div');
+					imgWrap.className = 'image-msg bubble';
+					const img = document.createElement('img');
+					img.loading = 'lazy';
+					img.decoding = 'async';
+					img.src = msg.imageUrl || msg.imageDataUrl;
+					img.alt = 'imagen enviada';
+						img.addEventListener('click', (e) => {
+							e.preventDefault();
+							e.stopPropagation();
+							openImageDialog(img.src);
+						});
+					imgWrap.appendChild(img);
+					wrap.appendChild(imgWrap);
+				}
+				if (msg.type === 'audio' && (msg.audioDataUrl)) {
+					const aWrap = document.createElement('div');
+					aWrap.className = 'audio-msg bubble';
+					const audio = document.createElement('audio');
+					audio.controls = true;
+					audio.src = msg.audioDataUrl;
+					aWrap.appendChild(audio);
+					wrap.appendChild(aWrap);
+				}
+				if (msg.text) {
+					const text = document.createElement('div');
+					text.className = 'text bubble';
+					const raw = (msg.text || '').trim();
+					if (/^https?:\/\/\S+/i.test(raw)) {
+						const a = document.createElement('a');
+						a.href = raw;
+						a.textContent = raw;
+						a.style.color = 'var(--primary)';
+						a.addEventListener('click', (e) => {
+							e.preventDefault();
+							window.location.replace(a.href);
+						});
+						text.appendChild(a);
+					} else {
+						text.textContent = raw;
+					}
+					wrap.appendChild(text);
+				}
+				// Guardar ts para ordenamiento estable en el DOM
+				wrap.dataset.ts = String(msg.ts || 0);
+				// Insertar en el lugar correcto por ts (asc)
+				const ts = Number(wrap.dataset.ts || '0');
+				let inserted = false;
+				let node = messagesEl.lastElementChild;
+				while (node && Number(node.dataset.ts || '0') > ts) {
+					node = node.previousElementSibling;
+				}
+				if (!node) {
+					messagesEl.insertBefore(wrap, messagesEl.firstElementChild);
+					inserted = true;
+				} else {
+					// Insertar después del último menor o igual
+					messagesEl.insertBefore(wrap, node.nextElementSibling);
+					inserted = (node === messagesEl.lastElementChild);
+				}
+				// Auto-scroll sólo si el mensaje es el más nuevo
+				if (inserted) {
+					messagesEl.scrollTop = messagesEl.scrollHeight;
+				}
+			}
+
+			function appendMessageOnce(uniqueId, msg) {
+				if (!uniqueId) {
+					uniqueId = (msg && msg.ts ? String(msg.ts) : String(Date.now())) + '|' + (msg && msg.text ? msg.text.slice(0,32) : '')
+				}
+				if (renderedMessageIds.has(uniqueId)) return;
+				renderedMessageIds.add(uniqueId);
+				appendMessage(msg);
+			}
+
+			function clearChat() {
+							messagesEl.innerHTML = '';
+							renderedMessageIds = new Set();
+							if (chatListener) {
+								try { off(chatListener.ref, 'child_added', chatListener.callback); } catch {}
+								chatListener = null;
+							}
+							if (unsubscribeHistoryFS) {
+								try { unsubscribeHistoryFS(); } catch {}
+								unsubscribeHistoryFS = null;
+							}
+							if (messagesScrollHandler) {
+								messagesEl.removeEventListener('scroll', messagesScrollHandler);
+								messagesScrollHandler = null;
+							}
+			}
+			
+			function loadChat(userKey) {
+			clearChat();
+			if (!userKey) {
+				updateActiveChatHeader();
+				return;
+			}
+
+			const convRef = ref(db, 'chat/conversaciones/' + userKey);
+			subscribeFirestoreHistory(userKey);
+
+			const INITIAL_MESSAGE_LIMIT = 50;
+			const convQuery = query(convRef, orderByChild('ts'), limitToLast(INITIAL_MESSAGE_LIMIT));
+			const childAddedHandler = (snap) => {
+				const val = snap.val() || {};
+				if (!val.ts && val.timestamp) val.ts = val.timestamp;
+				appendMessageOnce(snap.key, val);
+				handleNewMessage(userKey, val);
+			};
+			onChildAdded(convQuery, childAddedHandler);
+			chatListener = { ref: convQuery, callback: childAddedHandler };
+
+			const messagesEl = document.getElementById('messages');
+			let isLoadingOldMessages = false;
+
+			const scrollHandler = async () => {
+				if (messagesEl.scrollTop === 0 && !isLoadingOldMessages) {
+				isLoadingOldMessages = true;
+
+				const first = messagesEl.firstElementChild;
+				const oldestTs = first ? Number(first.dataset.ts || '0') : 0;
+				if (!oldestTs) {
+					isLoadingOldMessages = false;
+					return;
+				}
+
+				try {
+					const moreQuery = query(convRef, orderByChild('ts'), endAt(oldestTs - 1), limitToLast(INITIAL_MESSAGE_LIMIT));
+					const snapshot = await get(moreQuery);
+					const data = snapshot.val() || {};
+					const entries = Object.entries(data);
+					for (const [key, val] of entries) {
+					if (!renderedMessageIds.has(key)) {
+						appendMessageOnce(key, val);
+					}
+					}
+				} catch (err) {
+					console.error("Error cargando mensajes antiguos:", err);
+				}
+
+				isLoadingOldMessages = false;
+				}
+			};
+			messagesEl.addEventListener('scroll', scrollHandler);
+			messagesScrollHandler = scrollHandler;
+			selectedUserKey = userKey;
+			clearUnread(userKey);
+			updateActiveChatHeader();
+			}
+
+			async function upsertConversationMetadata(userKey, info = {}) {
+				if (!userKey) return;
+				const type = info.type || (info.text ? 'text' : (info.imageDataUrl || info.name) ? 'image' : info.audioDataUrl ? 'audio' : 'text');
+				let preview = null;
+				if (type === 'text') {
+					preview = (info.text || '').slice(0, 120);
+				} else if (type === 'image') {
+					preview = info.name ? `📷 ${info.name}` : '📷 Imagen enviada';
+				} else if (type === 'audio') {
+					preview = '🎤 Audio enviado';
+				}
+				const ts = typeof info.ts === 'number' ? info.ts : nowMs();
+				const payload = {
+					userKey,
+					hasHistory: true,
+					lastMessageType: type,
+					lastMessagePreview: preview,
+					lastMessageTs: ts,
+					lastSender: info.sender || null,
+					lastSenderRole: info.role || null,
+					updatedAt: fsServerTimestamp()
+				};
+				try {
+					await setDoc(doc(fs, 'conversaciones', userKey), payload, { merge: true });
+					conversationMeta[userKey] = { ...(conversationMeta[userKey] || {}), ...payload };
+					if (currentUser.role === 'admin') {
+						renderUserList();
+					}
+				} catch (err) {
+					console.warn('No se pudo actualizar metadata de conversación:', err);
+				}
+			}
+		async function sendTextToCurrentChat(text) {
+			const trimmed = (text || '').trim();
+			if (!trimmed) return;
+			let userChatKey = null;
+			if (currentUser.role === 'admin') {
+				if (!selectedUserKey) return;
+				userChatKey = selectedUserKey;
+			} else {
+				userChatKey = currentUser.name;
+			}
+			if (!userChatKey) return;
+			const convRef = ref(db, 'chat/conversaciones/' + userChatKey);
+			const payload = {
+				text: trimmed,
+				sender: currentUser.role === 'admin' ? 'Administrador' : currentUser.name || 'Anónimo',
+				role: currentUser.role,
+				ts: nowMs(),
+				timestamp: serverTimestamp()
+			};
+			const newRef = push(convRef);
+			await set(newRef, payload);
+			try {
+				await addDoc(collection(fs, 'mensajes'), {
+					...payload,
+					userKey: userChatKey,
+					userKeyNormalized: (userChatKey || '').toLowerCase(),
+					rtdbKey: newRef.key || null,
+					createdAt: fsServerTimestamp()
+				});
+				appendMessageOnce(newRef.key, payload);
+			} catch (e) {
+				console.warn('No se pudo archivar en la base de datos', e);
+			}
+		try {
+			await upsertConversationMetadata(userChatKey, {
+				type: 'text',
+				text: trimmed,
+				sender: payload.sender,
+				role: payload.role,
+				ts: payload.ts
+			});
+		} catch (err) {
+			console.warn('No se pudo actualizar metadata de conversación (texto):', err);
+		}
+		}
+
+		async function sendCurrentMessage() {
+			const raw = messageInput.value;
+			const text = raw.trim();
+			if (!text) return;
+			messageInput.value = '';
+			messageInput.focus();
+			try {
+				await sendTextToCurrentChat(text);
+			} catch (err) {
+				console.warn('No se pudo enviar el mensaje de texto:', err);
+				messageInput.value = raw;
+				messageInput.focus();
+				alert('No se pudo enviar el mensaje. Intentalo de nuevo');
+			}
+		}
+
+			function isImage(file) {
+				if (!file) return false;
+				const type = (file.type || '').toLowerCase();
+				const name = (file.name || '').toLowerCase();
+				if (type.startsWith('video/')) return false;
+				if (type === 'image/gif' || /\.gif$/i.test(name)) return false;
+				const okMime = type.startsWith('image/') && type !== 'image/gif';
+				const okExt = /\.(jpe?g|png|webp|bmp)$/i.test(name);
+				return okMime || okExt;
+			}
+
+			async function compressImageToDataURL(file, opts = {}) {
+				const maxSize = opts.maxSize || 960;
+				const quality = opts.quality || 0.75;
+				const bgColor = opts.bgColor || '#ffffff';
+				return new Promise((resolve, reject) => {
+					try {
+						const url = URL.createObjectURL(file);
+						const img = new Image();
+						img.onload = () => {
+							try {
+								const iw = img.naturalWidth || img.width;
+								const ih = img.naturalHeight || img.height;
+								let tw = iw;
+								let th = ih;
+								if (iw > ih && iw > maxSize) { th = Math.round(ih * (maxSize / iw)); tw = maxSize; }
+								else if (ih >= iw && ih > maxSize) { tw = Math.round(iw * (maxSize / ih)); th = maxSize; }
+								const canvas = document.createElement('canvas');
+								canvas.width = tw; canvas.height = th;
+								const ctx = canvas.getContext('2d');
+								ctx.fillStyle = bgColor;
+								ctx.fillRect(0, 0, tw, th);
+								ctx.drawImage(img, 0, 0, tw, th);
+								const dataUrl = canvas.toDataURL('image/jpeg', quality);
+								URL.revokeObjectURL(url);
+								resolve(dataUrl);
+							} catch (e) {
+								URL.revokeObjectURL(url);
+								reject(e);
+							}
+						};
+						img.onerror = () => {
+							URL.revokeObjectURL(url);
+							reject(new Error('No se pudo leer la imagen. Formato no soportado por el navegador'));
+						};
+						img.src = url;
+					} catch (err) {
+						reject(err);
+					}
+				});
+			}
+
+			function showImagePreview(file) {
+				if (!file) return;
+				if (imagePreviewThumb.src && imagePreviewThumb.src.startsWith('blob:')) {
+					try { URL.revokeObjectURL(imagePreviewThumb.src); } catch {}
+				}
+				pendingImageFile = file;
+				const url = URL.createObjectURL(file);
+				imagePreviewThumb.src = url;
+				imagePreviewName.textContent = file.name || 'imagen';
+				imagePreview.style.display = 'flex';
+				messagesEl.scrollTop = messagesEl.scrollHeight;
+				confirmImageBtn.disabled = false;
+				cancelImageBtn.disabled = false;
+			}
+
+			function clearImagePreview() {
+				if (imagePreviewThumb.src && imagePreviewThumb.src.startsWith('blob:')) {
+					try { URL.revokeObjectURL(imagePreviewThumb.src); } catch {}
+				}
+				imagePreviewThumb.src = '';
+				imagePreview.style.display = 'none';
+				pendingImageFile = null;
+				uploadingImage = false;
+				confirmImageBtn.disabled = false;
+				cancelImageBtn.disabled = false;
+			}
+
+			function formatDuration(ms) {
+				const total = Math.floor(ms / 1000);
+				const m = String(Math.floor(total / 60)).padStart(2, '0');
+				const s = String(total % 60).padStart(2, '0');
+				return `${m}:${s}`;
+			}
+
+			function startRecordingTimer() {
+				recordingStartedAt = Date.now();
+				recordingTimeEl.textContent = '00:00';
+				recordingBar.style.display = 'flex';
+				recordingTimer = setInterval(() => {
+					recordingTimeEl.textContent = formatDuration(Date.now() - recordingStartedAt);
+				}, 200);
+			}
+
+			function stopRecordingTimer() {
+				if (recordingTimer) { clearInterval(recordingTimer); recordingTimer = null; }
+				recordingBar.style.display = 'none';
+			}
+
+			async function ensureMicStream() {
+				return await navigator.mediaDevices.getUserMedia({ audio: true });
+			}
+
+			function onAudioDataAvailable(e) {
+				if (e.data && e.data.size > 0) audioChunks.push(e.data);
+			}
+
+		async function startAudioRecording() {
+		try {
+			const stream = await ensureMicStream();
+			audioChunks = [];
+			mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+
+			mediaRecorder.ondataavailable = onAudioDataAvailable;
+
+			mediaRecorder.onstop = async () => {
+			stream.getTracks().forEach(t => t.stop());
+			const blob = new Blob(audioChunks, { type: 'audio/webm' });
+			const sizeKB = Math.round(blob.size / 1024);
+
+			if (sizeKB < 3) { 
+				console.warn('Audio muy corto, no se envía');
+				mediaRecorder = null; 
+				audioChunks = []; 
+				return; 
+			}
+
+			const reader = new FileReader();
+			reader.onloadend = async () => {
+				const dataUrl = reader.result;
+				try {
+					await sendAudioMessage(dataUrl);
+				} catch (err) {
+					console.error('Error al enviar audio:', err);
+					alert('No se pudo subir el audio');
+				}
+				mediaRecorder = null;
+				audioChunks = [];
+			};
+			reader.readAsDataURL(blob);
+			};
+
+			mediaRecorder.start();
+			startRecordingTimer();
+			setTimeout(() => {
+			if (mediaRecorder && mediaRecorder.state === 'recording') stopAudioRecording(true);
+			}, 60000);
+
+		} catch (err) {
+			alert('No se pudo acceder al micrófono. Revisá permisos del navegador');
+		}
+		}
+
+			async function stopAudioRecording(auto = false) {
+				if (!mediaRecorder) return;
+				if (mediaRecorder.state === 'recording') {
+					try { mediaRecorder.stop(); } catch {}
+				}
+				stopRecordingTimer();
+			}
+
+			async function sendAudioMessage(audioDataUrl) {
+				let userChatKey = null;
+				if (currentUser.role === 'admin') {
+					if (!selectedUserKey) return;
+					userChatKey = selectedUserKey;
+				} else {
+					userChatKey = currentUser.name;
+				}
+				if (!userChatKey) return;
+				const convRef = ref(db, 'chat/conversaciones/' + userChatKey);
+				const payload = {
+					type: 'audio',
+					audioDataUrl,
+					sender: currentUser.role === 'admin' ? 'Administrador' : currentUser.name || 'Anónimo',
+					role: currentUser.role,
+					ts: nowMs(),
+					timestamp: serverTimestamp()
+				};
+				const newRef = push(convRef);
+				await set(newRef, payload);
+				try {
+					await addDoc(collection(fs, 'mensajes'), {
+						...payload,
+						userKey: userChatKey,
+						userKeyNormalized: (userChatKey || '').toLowerCase(),
+						rtdbKey: newRef.key || null,
+						createdAt: fsServerTimestamp()
+					});
+					appendMessageOnce(newRef.key, payload);
+				} catch (e) { console.warn('No se pudo archivar audio en base de datos:', e); }
+				try {
+					await upsertConversationMetadata(userChatKey, {
+						type: 'audio',
+						sender: payload.sender,
+						role: payload.role,
+						ts: payload.ts
+					});
+				} catch (err) {
+					console.warn('No se pudo actualizar metadata de conversación (audio):', err);
+				}
+			}
+
+			audioBtn.addEventListener('mousedown', (e) => { e.preventDefault(); startAudioRecording(); });
+			audioBtn.addEventListener('mouseup', (e) => { e.preventDefault(); stopAudioRecording(); });
+			audioBtn.addEventListener('mouseleave', (e) => { if (mediaRecorder && mediaRecorder.state === 'recording') stopAudioRecording(); });
+			audioBtn.addEventListener('touchstart', (e) => { e.preventDefault(); startAudioRecording(); }, { passive: false });
+			audioBtn.addEventListener('touchend', (e) => { e.preventDefault(); stopAudioRecording(); }, { passive: false });
+			async function uploadImageAndSend(file) {
+				try {
+					if (!isImage(file)) return;
+					uploadingImage = true;
+					confirmImageBtn.disabled = true;
+					cancelImageBtn.disabled = true;
+					let userChatKey = null;
+					if (currentUser.role === 'admin') {
+						if (!selectedUserKey) return;
+						userChatKey = selectedUserKey;
+					} else {
+						userChatKey = currentUser.name;
+					}
+					if (!userChatKey) return;
+					const convRef = ref(db, 'chat/conversaciones/' + userChatKey);
+					const dataUrl = await compressImageToDataURL(file, { maxSize: 960, quality: 0.75 });
+					const approxBytes = Math.ceil((dataUrl.length - 'data:image/jpeg;base64,'.length) * 3 / 4);
+					if (approxBytes > 400 * 1024) {
+						throw new Error('La imagen es muy pesada');
+					}
+					const payload = {
+						type: 'image',
+						imageDataUrl: dataUrl,
+						name: file.name || null,
+						sender: currentUser.role === 'admin' ? 'Administrador' : currentUser.name || 'Anónimo',
+						role: currentUser.role,
+						ts: nowMs(),
+						timestamp: serverTimestamp()
+					};
+					const newRef = push(convRef);
+					await set(newRef, payload);
+					try {
+						await addDoc(collection(fs, 'mensajes'), {
+							...payload,
+							userKey: userChatKey,
+							userKeyNormalized: (userChatKey || '').toLowerCase(),
+							rtdbKey: newRef.key || null,
+							createdAt: fsServerTimestamp()
+						});
+						appendMessageOnce(newRef.key, payload);
+					} catch (e) {
+						console.warn('No se pudo archivar imagen en base de datos:', e);
+					}
+					try {
+						await upsertConversationMetadata(userChatKey, {
+							type: 'image',
+							name: payload.name || null,
+							sender: payload.sender,
+							role: payload.role,
+							ts: payload.ts
+						});
+					} catch (err) {
+						console.warn('No se pudo actualizar metadata de conversación (imagen):', err);
+					}
+					clearImagePreview();
+				} catch (err) {
+					console.error('Error subiendo imagen', err);
+					const msg = (err && err.message) ? err.message : 'No se pudo enviar la imagen';
+					alert(msg);
+					uploadingImage = false;
+					confirmImageBtn.disabled = false;
+					cancelImageBtn.disabled = false;
+				}
+			}
+
+			imageBtn.addEventListener('click', () => imageInput.click());
+			imageInput.addEventListener('change', (e) => {
+				const file = e.target.files && e.target.files[0];
+				if (file) {
+					if (!isImage(file)) {
+						alert('Solo se permiten imágenes (JPG, PNG, WEBP, HEIC) GIF y videos no están permitidos');
+					} else {
+						if (uploadingImage) return;
+						showImagePreview(file);
+					}
+				}
+				imageInput.value = '';
+			});
+
+			// Paste handler (desktop)
+			document.addEventListener('paste', (e) => {
+				if (!e.clipboardData) return;
+				const items = Array.from(e.clipboardData.items || []);
+				const fileItem = items.find(i => i.kind === 'file');
+				if (fileItem) {
+					const file = fileItem.getAsFile();
+					if (file) {
+						if (!isImage(file)) {
+							alert('Solo se permiten imágenes (JPG, PNG, WEBP, HEIC) GIF y videos no están permitidos');
+						} else {
+							if (uploadingImage) return;
+							showImagePreview(file);
+						}
+					}
+				}
+			});
+
+			// Drag & drop (desktop)
+			const dropTargets = [messagesEl, document.body];
+			dropTargets.forEach(el => {
+				el.addEventListener('dragover', (e) => { e.preventDefault(); });
+				el.addEventListener('drop', (e) => {
+					e.preventDefault();
+					const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+					if (file) {
+						if (!isImage(file)) {
+							alert('Solo se permiten imágenes (JPG, PNG, WEBP, HEIC) GIF y videos no están permitidos');
+						} else {
+							if (uploadingImage) return;
+							showImagePreview(file);
+						}
+					}
+				});
+			});
+
+			// Confirm/Cancel image
+			confirmImageBtn.addEventListener('click', async () => {
+				if (pendingImageFile && !uploadingImage) {
+					await uploadImageAndSend(pendingImageFile);
+				}
+			});
+			cancelImageBtn.addEventListener('click', () => {
+				if (uploadingImage) return;
+				clearImagePreview();
+			});
+
+			sendBtn.addEventListener('click', sendCurrentMessage);
+			messageInput.addEventListener('keydown', (e) => {
+				if (e.key === 'Enter') {
+					e.preventDefault();
+					sendCurrentMessage();
+				}
+			});
+
+			// Forzar que cualquier clickeado dentro del área de mensajes navegue en la misma pestaña (accesos)
+			messagesEl.addEventListener('click', (e) => {
+				const a = e.target && e.target.closest ? e.target.closest('a') : null;
+				if (a && a.href && /^https?:\/\//i.test(a.href)) {
+					e.preventDefault();
+					window.location.replace(a.href);
+				}
+			});
+
+			if (shortcutGanamos) {
+				shortcutGanamos.addEventListener('click', async () => {
+					if (currentUser.role !== 'admin') return;
+					if (!selectedUserKey) {
+						return;
+					}
+					await sendTextToCurrentChat('https://www.ganamos.pw/');
+				});
+			}
+
+			if (shortcutZeus) {
+				shortcutZeus.addEventListener('click', async () => {
+					if (currentUser.role !== 'admin') return;
+					if (!selectedUserKey) {
+						return;
+					}
+					await sendTextToCurrentChat('https://www.casinozeus26.com/');
+				});
+			}
+
+			if (shortcutBet30) {
+				shortcutBet30.addEventListener('click', async () => {
+					if (currentUser.role !== 'admin') return;
+					if (!selectedUserKey) {
+						return;
+					}
+					await sendTextToCurrentChat('https://www.bet30.gold/');
+				});
+			}
+
+			if (shortcutCamel) {
+				shortcutCamel.addEventListener('click', async () => {
+					if (currentUser.role !== 'admin') return;
+					if (!selectedUserKey) {
+						return;
+					}
+					await sendTextToCurrentChat('https://www.camelbet24.com/');
+				});
+			}
+
+			if (shortcutGnaCsa) {
+				shortcutGnaCsa.addEventListener('click', async () => {
+					if (currentUser.role !== 'admin') return;
+					if (!selectedUserKey) {
+						return;
+					}
+					await sendTextToCurrentChat('http://ganaencasa24.com/');
+				});
+			}
+
+			if (shortcutCelu) {
+				shortcutCelu.addEventListener('click', async () => {
+					if (currentUser.role !== 'admin') return;
+					if (!selectedUserKey) {
+						return;
+					}
+					await sendTextToCurrentChat('https://www.celuapuestas24.ws/');
+				});
+			}
+
+			if (shortcutFortu) {
+				shortcutFortu.addEventListener('click', async () => {
+					if (currentUser.role !== 'admin') return;
+					if (!selectedUserKey) {
+						return;
+					}
+					await sendTextToCurrentChat('http://fortubet24.ws/');
+				});
+			}
+
+			if (shortcutArgen) {
+				shortcutArgen.addEventListener('click', async () => {
+					if (currentUser.role !== 'admin') return;
+					if (!selectedUserKey) {
+						return;
+					}
+					await sendTextToCurrentChat('https://argenbet.net/');
+				});
+			}
+
+			if (shortcutPoseidon) {
+				shortcutPoseidon.addEventListener('click', async () => {
+					if (currentUser.role !== 'admin') return;
+					if (!selectedUserKey) {
+						return;
+					}
+					await sendTextToCurrentChat('https://granposeidon.eu/');
+				});
+			}
+
+			// Paneles: navegación directa
+			if (panelG32) {
+				panelG32.addEventListener('click', () => {
+					try { window.open('https://bo.casinoenvivo.club/login', '_blank', 'noopener,noreferrer'); } catch {}
+				});
+			}
+			if (panelGnmos) {
+				panelGnmos.addEventListener('click', () => {
+					try { window.open('https://bo.ganamos.pw/login', '_blank', 'noopener,noreferrer'); } catch {}
+				});
+			}
+			if (panelArgen) {
+				panelArgen.addEventListener('click', () => {
+					try { window.open('https://admin.argenbet.net/users/all', '_blank', 'noopener,noreferrer'); } catch {}
+				});
+			}
+
+			// Cajero: configurar sonido de notificaciones (solo admin)
+			if (btnCajeroSound) {
+				btnCajeroSound.addEventListener('click', () => {
+					if (currentUser.role !== 'admin') return;
+					updateSoundStatusLabel();
+					try { soundDialog.showModal(); } catch { soundDialog.open = true; }
+				});
+			}
+
+			if (btnCajeroSupport) {
+				btnCajeroSupport.addEventListener('click', () => {
+					if (currentUser.role !== 'admin') return;
+					alert(SUPPORT_WHATSAPP_MESSAGE);
+				});
+			}
+
+			function attemptOpenNotificationSettings() {
+				if (typeof window === 'undefined') return false;
+				try {
+					const ua = (navigator.userAgent || '').toLowerCase();
+					const mappings = [
+						{ match: (u) => u.includes('edg'), url: 'edge://settings/content/notifications' },
+						{ match: (u) => u.includes('opr') || u.includes('opera'), url: 'opera://settings/content/notifications' },
+						{ match: (u) => u.includes('chrome') && !u.includes('edg') && !u.includes('opr'), url: 'chrome://settings/content/notifications' },
+						{ match: (u) => u.includes('firefox'), url: 'about:preferences#privacy' }
+					];
+					for (const entry of mappings) {
+						if (entry.match(ua)) {
+							const popup = window.open(entry.url, '_blank');
+							return !!popup;
+						}
+					}
+				} catch (err) {
+					console.warn('No se pudo abrir la configuración de notificaciones:', err);
+				}
+				return false;
+			}
+
+			function getNotificationPermissionLabel() {
+				if (!('Notification' in window)) return 'Notificaciones: no soportadas';
+				switch (Notification.permission) {
+					case 'granted':
+						return 'Notificaciones: activadas';
+					case 'denied':
+						return 'Notificaciones: bloqueadas';
+					default:
+						return 'Notificaciones: pendientes';
+				}
+			}
+
+			function updateSoundStatusLabel(extra = '') {
+				if (!soundStatus) return;
+				let base;
+				if (pendingCustomSoundDataUrl) {
+					const kb = Math.round((pendingCustomSoundDataUrl.length * 3 / 4) / 1024);
+					base = `Cargado (no guardado): ~${kb} KB${extra ? ' - ' + extra : ''}`;
+				} else if (customNotificationDataUrl) {
+					const kb = Math.round((customNotificationDataUrl.length * 3 / 4) / 1024);
+					base = `Actual: personalizado (~${kb} KB)`;
+				} else {
+					base = 'Actual: predeterminado';
+				}
+				const permissionInfo = getNotificationPermissionLabel();
+				soundStatus.textContent = permissionInfo ? `${base} · ${permissionInfo}` : base;
+			}
+
+			if (soundFileInput) {
+				soundFileInput.addEventListener('change', () => {
+					const file = soundFileInput.files && soundFileInput.files[0];
+					if (!file) return;
+					if (!file.type || !file.type.startsWith('audio/')) {
+						alert('Elegí un archivo de audio válido');
+						return;
+					}
+					// Limitar tamaño ~ 400 KB para no saturar localStorage
+					const MAX_BYTES = 400 * 1024;
+					if (file.size > MAX_BYTES) {
+						alert('El audio es muy pesado (máximo ~400KB) Elegí uno más corto');
+						return;
+					}
+					const reader = new FileReader();
+					reader.onloadend = () => {
+						pendingCustomSoundDataUrl = String(reader.result || '');
+						updateSoundStatusLabel(file.name || '');
+					};
+					reader.readAsDataURL(file);
+				});
+			}
+
+			if (soundTestBtn) {
+				soundTestBtn.addEventListener('click', () => {
+					if (pendingCustomSoundDataUrl) {
+						const a = new Audio(pendingCustomSoundDataUrl);
+						a.play().catch(() => alert('El navegador bloqueó la reproducción. Interactuá con la página e intentá de nuevo'));
+						return;
+					}
+					playNotificationSound();
+				});
+			}
+
+			if (soundSaveBtn) {
+				soundSaveBtn.addEventListener('click', () => {
+					if (!pendingCustomSoundDataUrl) {
+						alert('Primero elegí un archivo de audio');
+						return;
+					}
+					setCustomNotificationSound(pendingCustomSoundDataUrl);
+					pendingCustomSoundDataUrl = null;
+					updateSoundStatusLabel();
+					alert('Sonido personalizado guardado');
+				});
+			}
+
+			if (soundResetBtn) {
+				soundResetBtn.addEventListener('click', () => {
+					clearCustomNotificationSound();
+					pendingCustomSoundDataUrl = null;
+					updateSoundStatusLabel();
+					alert('Se quitó el sonido personalizado');
+				});
+			}
+
+			if (soundPermissionBtn) {
+				soundPermissionBtn.addEventListener('click', async () => {
+					if (!('Notification' in window)) {
+						alert('Tu navegador no soporta notificaciones push');
+						return;
+					}
+					const granted = await requestNotificationPermission({ force: true });
+					if (granted) {
+						updateSoundStatusLabel();
+						playNotificationSound();
+						alert('las notificaciones están activas');
+						return;
+					}
+					updateSoundStatusLabel();
+					if (Notification.permission === 'denied') {
+						const opened = attemptOpenNotificationSettings();
+						const hint = opened
+							? 'Revisá la pestaña o ventana que se abrió y habilitá las notificaciones para este sitio'
+							: 'Abrí la configuración de tu navegador y permití las notificaciones para este sitio manualmente';
+						alert('El navegador está bloqueando las notificaciones para este sitio. ' + hint);
+					} else {
+						alert('No se pudo activar el permiso. Verificá si el navegador bloqueó el cuadro de diálogo e intentá nuevamente');
+					}
+				});
+			}
+
+			loadCustomNotificationSoundFromStorage();
+			try {
+				const savedVol = getSavedVolume();
+				if (soundVolumeRange) {
+					soundVolumeRange.value = Math.round(savedVol * 100);
+					if (soundVolumeValue) soundVolumeValue.textContent = `${Math.round(savedVol * 100)}%`;
+				}
+			} catch {}
+
+			if (soundVolumeRange) {
+				soundVolumeRange.addEventListener('input', () => {
+					const v = Math.max(0, Math.min(100, Number(soundVolumeRange.value || 100)));
+					if (soundVolumeValue) soundVolumeValue.textContent = `${Math.round(v)}%`;
+					try { localStorage.setItem('notificationVolume', String(v/100)); } catch {}
+				});
+			}
+
+			// Cajero: borrar mensajes a demanda (solo admin)
+			if (btnCajeroClear) {
+				btnCajeroClear.addEventListener('click', async () => {
+					if (currentUser.role !== 'admin') return;
+					const sure = confirm('¿Seguro que vas a borrar TODOS los mensajes? (texto, imágenes y audios)');
+					if (!sure) return;
+					// Confirmación adicional
+					const sure2 = confirm('Esta acción es INMEDIATA y no se puede REVERTIR');
+					if (!sure2) return;
+					const prevText = btnCajeroClear.textContent;
+					btnCajeroClear.textContent = 'Borrando...';
+					btnCajeroClear.style.opacity = '0.7';
+					btnCajeroClear.style.pointerEvents = 'none';
+					try {
+						const { deletedRTDB, deletedFS } = await runCajeroClear();
+						const total = (deletedRTDB || 0) + (deletedFS || 0);
+						alert(`Se borraron ${total} mensajes (BS.T: ${deletedRTDB || 0}, Base de datos: ${deletedFS || 0})`);
+					} catch (err) {
+						alert('Hubo un problema al borrar los mensajes');
+					} finally {
+						btnCajeroClear.textContent = prevText;
+						btnCajeroClear.style.opacity = '';
+						btnCajeroClear.style.pointerEvents = '';
+					}
+				});
+			}
+
+			function subscribeFirestoreHistory(userKey) {
+				if (unsubscribeHistoryFS) { try { unsubscribeHistoryFS(); } catch {} unsubscribeHistoryFS = null; }
+				try {
+					const col = collection(fs, 'mensajes');
+					const normalized = (userKey || '').toLowerCase();
+					const unsubs = [];
+					const handler = (snap) => {
+						const docs = snap.docs || [];
+						const entries = docs.map((d) => {
+							const data = d.data() || {};
+							const id = data.rtdbKey || d.id;
+							const tsFromCreatedAt = data.createdAt && typeof data.createdAt.toMillis === 'function' ? data.createdAt.toMillis() : null;
+							const ts = (typeof data.ts === 'number') ? data.ts : (tsFromCreatedAt ?? (d.createTime ? d.createTime.toMillis() : Date.now()));
+							const inferredType = data.type || (data.audioDataUrl ? 'audio' : ((data.imageDataUrl || data.imageUrl) ? 'image' : (data.text ? 'text' : null)));
+							return {
+								id,
+								ts,
+								msg: {
+									type: inferredType || undefined,
+									text: data.text || null,
+									imageDataUrl: data.imageDataUrl || data.imageUrl || null,
+									audioDataUrl: data.audioDataUrl || null,
+									name: data.name || null,
+									sender: data.sender || 'Anónimo',
+									role: data.role || 'user',
+									ts: ts
+								}
+							};
+						}).sort((a, b) => (a.ts || 0) - (b.ts || 0));
+						const startIndex = Math.max(0, entries.length - FIRESTORE_HISTORY_LIMIT);
+						for (let i = startIndex; i < entries.length; i++) {
+							const { id, msg } = entries[i];
+							appendMessageOnce(id, msg);
+						}
+						const lastEntry = entries.length ? entries[entries.length - 1] : null;
+						if (lastEntry) {
+							const msg = lastEntry.msg || {};
+							const type = msg.audioDataUrl ? 'audio' : (msg.imageDataUrl ? 'image' : 'text');
+							upsertConversationMetadata(userKey, {
+								type,
+								text: msg.text || null,
+								name: msg.name || null,
+								sender: msg.sender,
+								role: msg.role,
+								ts: msg.ts
+							}).catch((err) => console.warn('No se pudo actualizar metadata desde historial:', err));
+						}
+					};
+					unsubs.push(onSnapshot(fsQuery(col, where('userKeyNormalized', '==', normalized)), handler, (err) => console.warn('Error hist FS normalized', err)));
+					if (normalized !== userKey) {
+						unsubs.push(onSnapshot(fsQuery(col, where('userKey', '==', userKey)), handler, (err) => console.warn('Error hist FS legacy', err)));
+					}
+					unsubscribeHistoryFS = () => { unsubs.forEach(u => { try { u(); } catch {} }); };
+				} catch (err) {
+					console.warn('No se pudo suscribir a historial FS', err);
+				}
+			}
+
+			// --- Lista de usuarios para el admin ---
+			const userListEl = document.getElementById('userList');
+			function clearUserList() { userListEl.innerHTML = ''; }
+
+				function teardownAdminSubscriptions() {
+					if (unsubscribeConversations) {
+						unsubscribeConversations();
+						unsubscribeConversations = null;
+					}
+					if (unsubscribeAliases) {
+						unsubscribeAliases();
+						unsubscribeAliases = null;
+					}
+					if (unsubscribeConversationsMeta) {
+						unsubscribeConversationsMeta();
+						unsubscribeConversationsMeta = null;
+					}
+					conversations = {};
+					userAliases = {};
+					conversationMeta = {};
+					knownUserKeys = new Set();
+					userListHydrated = false;
+					closeContextMenu();
+					stopCleanupTimer();
+				}
+
+				function renderUserList() {
+					clearUserList();
+					const q = (document.getElementById('userSearch')?.value || '').trim().toLowerCase();
+					const combinedKeys = new Set([
+						...Object.keys(conversationMeta || {}),
+						...Object.keys(conversations || {})
+					]);
+					const newKeys = [];
+					combinedKeys.forEach(userKey => {
+						if (!knownUserKeys.has(userKey)) {
+							knownUserKeys.add(userKey);
+							if (userListHydrated) {
+								newKeys.push(userKey);
+							}
+						}
+					});
+					Array.from(knownUserKeys).forEach(userKey => {
+						if (!combinedKeys.has(userKey)) {
+							knownUserKeys.delete(userKey);
+						}
+					});
+					newKeys.forEach(userKey => {
+						if (!unreadCounts[userKey]) {
+							unreadCounts[userKey] = 1;
+						}
+						notifyNewConversation(userKey);
+					});
+					const users = Array.from(combinedKeys).filter(u => {
+						const name = (getDisplayName(u) || u || '').toLowerCase();
+						return !q || name.includes(q);
+					});
+					const sortedUsers = users.sort((a, b) => {
+						const metaA = conversationMeta[a];
+						const metaB = conversationMeta[b];
+						const tsA = metaA && typeof metaA.lastMessageTs === 'number' ? metaA.lastMessageTs : (metaA && metaA.updatedAtMs) || 0;
+						const tsB = metaB && typeof metaB.lastMessageTs === 'number' ? metaB.lastMessageTs : (metaB && metaB.updatedAtMs) || 0;
+						if (tsA !== tsB) {
+							return tsB - tsA;
+						}
+						const nameA = getDisplayName(a) || '';
+						const nameB = getDisplayName(b) || '';
+						return nameA.localeCompare(nameB, 'es', { sensitivity: 'base' });
+					});
+					sortedUsers.forEach(userKey => {
+						const btn = document.createElement('button');
+						btn.className = 'btn';
+						btn.style.justifyContent = 'flex-start';
+						btn.style.width = '100%';
+						btn.dataset.userKey = userKey;
+						const img = document.createElement('img');
+						img.src = 'assets/logo.png';
+						img.alt = 'logo';
+						img.className = 'list-avatar';
+						const span = document.createElement('span');
+						span.textContent = getDisplayName(userKey) || userKey;
+						btn.appendChild(img);
+						span.style.flex = '1';
+						btn.appendChild(span);
+						const meta = conversationMeta[userKey] || {};
+						if (meta.lastMessagePreview) {
+							const preview = document.createElement('div');
+							preview.textContent = meta.lastMessagePreview;
+							preview.style.cssText = 'font-size:11px;color:#a0a6b7;margin-top:2px;text-align:left;';
+							btn.appendChild(preview);
+						}
+						const unreadCount = unreadCounts[userKey] || 0;
+						if (unreadCount > 0) {
+							const badge = document.createElement('span');
+							badge.className = 'unread-badge';
+							badge.textContent = unreadCount > 99 ? '99+' : unreadCount;
+							badge.style.cssText = 'background:#ff6b6b;color:#fff;border-radius:999px;padding:2px 8px;font-size:11px;font-weight:600;margin-left:auto;';
+							btn.appendChild(badge);
+						}
+						if (selectedUserKey === userKey) {
+							btn.style.borderColor = '#2a5fff40';
+						}
+						btn.oncontextmenu = (e) => {
+							e.preventDefault();
+							e.stopPropagation();
+							showContextMenu(userKey, e.clientX, e.clientY);
+						};
+						btn.onclick = () => {
+							if (selectedUserKey !== userKey) {
+								loadChat(userKey);
+							}
+						};
+						userListEl.appendChild(btn);
+					});
+					if (!selectedUserKey || (!conversations[selectedUserKey] && !conversationMeta[selectedUserKey])) {
+						selectedUserKey = sortedUsers.length ? sortedUsers[0] : null;
+						if (selectedUserKey) {
+							loadChat(selectedUserKey);
+						} else {
+							clearChat();
+						}
+					} else {
+						updateActiveChatHeader();
+					}
+					if (!userListHydrated) {
+						userListHydrated = true;
+					}
+				}
+
+				function ensureAdminSubscriptions() {
+					if (!unsubscribeConversations) {
+						const convsRef = ref(db, 'chat/conversaciones');
+						unsubscribeConversations = onValue(convsRef, snap => {
+							conversations = snap.val() || {};
+							renderUserList();
+						});
+					}
+					if (!unsubscribeAliases) {
+						const aliasesRef = ref(db, 'chat/aliases');
+						unsubscribeAliases = onValue(aliasesRef, snap => {
+							userAliases = snap.val() || {};
+							renderUserList();
+						});
+					}
+					if (!unsubscribeConversationsMeta) {
+						const convsMetaCol = collection(fs, 'conversaciones');
+						unsubscribeConversationsMeta = onSnapshot(convsMetaCol, (snap) => {
+							const nextMeta = {};
+							snap.forEach((docSnap) => {
+								const data = docSnap.data() || {};
+								const normalized = {
+									...data,
+									updatedAtMs: data.updatedAt && typeof data.updatedAt.toMillis === 'function' ? data.updatedAt.toMillis() : null
+								};
+								nextMeta[docSnap.id] = normalized;
+							});
+							conversationMeta = nextMeta;
+							renderUserList();
+						}, (err) => console.warn('Error suscribiendo metadata de conversaciones', err));
+					}
+					renderUserList();
+					const searchInput = document.getElementById('userSearch');
+					if (searchInput && !searchInput.dataset.bound) {
+						searchInput.addEventListener('input', () => renderUserList());
+						searchInput.dataset.bound = '1';
+					}
+				}
+
+				let contextMenuEl = null;
+				function closeContextMenu() {
+					if (contextMenuEl) {
+						contextMenuEl.remove();
+						contextMenuEl = null;
+					}
+				}
+
+				function showContextMenu(user, x, y) {
+					closeContextMenu();
+					contextMenuEl = document.createElement('div');
+					contextMenuEl.style.position = 'fixed';
+					contextMenuEl.style.left = x + 'px';
+					contextMenuEl.style.top = y + 'px';
+					contextMenuEl.style.background = '#181818';
+					contextMenuEl.style.border = '1px solid #333';
+					contextMenuEl.style.borderRadius = '8px';
+					contextMenuEl.style.boxShadow = '0 4px 16px #0008';
+					contextMenuEl.style.zIndex = 9999;
+					contextMenuEl.style.minWidth = '140px';
+					contextMenuEl.innerHTML = `
+						<button style="all:unset;display:block;width:100%;padding:10px 16px;cursor:pointer;color:#fff;font-size:15px;" id="renameBtn">Cambiar nombre</button>
+						<button style="all:unset;display:block;width:100%;padding:10px 16px;cursor:pointer;color:#ff5c5c;font-size:15px;" id="deleteBtn">Borrar</button>`;
+					document.body.appendChild(contextMenuEl);
+					contextMenuEl.querySelector('#renameBtn').onclick = () => {
+						closeContextMenu();
+						const actual = getDisplayName(user);
+						const nuevo = prompt('Nuevo nombre para el usuario (solo visible para administrador):', actual || user);
+						if (nuevo !== null) {
+							renameUserChat(user, nuevo);
+						}
+					};
+					contextMenuEl.querySelector('#deleteBtn').onclick = () => {
+						closeContextMenu();
+						if (confirm('¿Seguro que deseas borrar el chat de "' + user + '"? Esta acción no se puede deshacer')) {
+							deleteUserChat(user);
+						}
+					};
+				}
+				document.addEventListener('click', closeContextMenu);
+					document.addEventListener('contextmenu', (e) => {
+						if (contextMenuEl && (contextMenuEl === e.target || contextMenuEl.contains(e.target))) return;
+						if (contextMenuEl) closeContextMenu();
+				});
+
+					function renameUserChat(userKey, aliasValue) {
+						const alias = (aliasValue || '').trim();
+						const currentAlias = userAliases[userKey] || '';
+						if (!alias && !currentAlias) {
+							return;
+						}
+						if (alias === currentAlias) {
+							return;
+						}
+						const aliasRef = ref(db, 'chat/aliases/' + (userKey || '').toLowerCase());
+						if (!alias) {
+							remove(aliasRef);
+						} else {
+							set(aliasRef, alias);
+						}
+						if (selectedUserKey === userKey) {
+							updateActiveChatHeader();
+						}
+					}
+
+					async function deleteUserChat(userKey) {
+						try {
+							await remove(ref(db, 'chat/conversaciones/' + userKey));
+							await remove(ref(db, 'chat/aliases/' + (userKey || '').toLowerCase()));
+						} catch (err) {
+							console.warn('No se pudo borrar el chat en Realtime:', err);
+						}
+						try {
+							await deleteDoc(doc(fs, 'conversaciones', userKey));
+						} catch (err) {
+							console.warn('No se pudo borrar metadata en base de datos:', err);
+						}
+						delete conversationMeta[userKey];
+						renderUserList();
+						if (selectedUserKey === userKey) {
+							selectedUserKey = null;
+							clearChat();
+							updateActiveChatHeader();
+						}
+					}
+
+			loginBtn.addEventListener('click', async () => {
+				const user = (usernameEl.value || '').trim();
+				const pass = (passwordEl.value || '').trim();
+				if (user === USER1 && pass === USER2) {
+					currentUser = { name: 'Administrador', role: 'admin' };
+					selectedUserKey = null;
+					loginError.textContent = '';
+					setView(true);
+					return;
+				}
+				if (!user) {
+					loginError.textContent = 'Ingresá un usuario para continuar';
+					usernameEl.focus();
+					return;
+				}
+				if (!pass) {
+					loginError.textContent = 'Ingresá una contraseña para continuar';
+					passwordEl.focus();
+					return;
+				}
+				const normalized = user.toLowerCase();
+				currentUser = { name: normalized, role: 'user', displayName: user };
+				selectedUserKey = normalized;
+				// Guardar alias del usuario (visible para admin) si no existe
+				try {
+					const aliasRef = ref(db, 'chat/aliases/' + normalized);
+					const snap = await get(aliasRef);
+					if (!snap.exists()) {
+						await set(aliasRef, user);
+					}
+				} catch (err) {}
+				loginError.textContent = '';
+				setView(true);
+			});
+
+			logoutBtn.addEventListener('click', () => {
+				currentUser = { name: null, role: 'user' };
+				selectedUserKey = null;
+				setView(false);
+			});
+
+		document.addEventListener('keydown', (e) => {
+			if (e.key === 'Escape') {
+				const dlg = document.getElementById('imgDialog');
+				if (dlg && dlg.open) return; 
+				if (chatCard.style.display !== 'none') {
+					logoutBtn.click();
+				}
+			}
+		});
+		updateClosedStateUI();
+		setInterval(updateClosedStateUI, 60 * 1000);
+		setView(false);
+		if (closedDismissBtn) {
+			closedDismissBtn.addEventListener('click', () => {
+				try { sessionStorage.setItem('closedOverlayDismissed', '1'); } catch {}
+				if (closedFullOverlay) closedFullOverlay.style.display = 'none';
+			});
+		}
+	</script>
+</body>
+</html>
