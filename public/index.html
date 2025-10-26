@@ -616,6 +616,9 @@
 	let userListHydrated = false;
 	let isLoggedInFlag = false;
 	let serverTimeOffsetMs = 0; // delta de reloj con el servidor RTDB
+	// Estado de lectura persistente por chat (solo admin)
+	let adminReadState = {}; // { userKey: lastReadTs }
+	let unsubscribeAdminReads = null;
 
 	// Sincronizar offset de reloj con RTDB para usar tiempos consistentes
 	onValue(ref(db, '.info/serverTimeOffset'), (snap) => {
@@ -623,6 +626,11 @@
 	}, { onlyOnce: false });
 
 	function nowMs(){ return Date.now() + (serverTimeOffsetMs || 0); }
+
+	function getLastMessageTs(userKey){
+		const meta = conversationMeta[userKey];
+		return (meta && typeof meta.lastMessageTs === 'number') ? meta.lastMessageTs : 0;
+	}
 
 	// --- Horario cerrado: 04:00–10:00 (Buenos Aires) ---
 	function isClosedHoursBuenosAires(date = new Date()) {
@@ -1064,6 +1072,11 @@
 			if (currentUser.role !== 'admin') return;
 			if (!userListHydrated) return;
 			if (!userKey || userKey === selectedUserKey) return;
+			// No notificar si ya está leído o si es viejo
+			const lastTs = getLastMessageTs(userKey);
+			const readTs = adminReadState[userKey] || 0;
+			const age = nowMs() - (lastTs || 0);
+			if (!lastTs || lastTs <= readTs || age > NEW_MESSAGE_MAX_AGE_MS) return;
 			const displayName = getDisplayName(userKey) || userKey;
 			const body = getLatestMessageSummary(userKey) || 'Nuevo chat disponible';
 			playNotificationSound();
@@ -1081,18 +1094,33 @@
 			}
 		}
 
+		// Persistir "leído" para administrador
+		async function markChatRead(userKey) {
+			try {
+				if (!userKey || currentUser.role !== 'admin') return;
+				const ts = nowMs();
+				adminReadState[userKey] = ts;
+				try { delete unreadCounts[userKey]; } catch {}
+				renderUserList();
+				await setDoc(doc(fs, 'adminState', 'reads'), { [userKey]: ts }, { merge: true });
+			} catch (err) {
+				console.warn('No se pudo marcar como leído', err);
+			}
+		}
+
 		// Detectar mensajes nuevos y notificar (solo para admin)
 		function handleNewMessage(userKey, message) {
 			if (currentUser.role !== 'admin') return;
 			if (!message || message.role === 'admin') return;
 			const lastTS = lastMessageTimestamps[userKey] || 0;
-			const msgTS = typeof message.ts === 'number' ? message.ts : (typeof message.timestamp === 'number' ? message.timestamp : Date.now());
+			const msgTS = typeof message.ts === 'number' ? message.ts : (typeof message.timestamp === 'number' ? message.timestamp : nowMs());
+			const readTs = adminReadState[userKey] || 0;
 			// Solo notificar si es un mensaje nuevo (posterior al último conocido)
 			if (msgTS > lastTS) {
 				lastMessageTimestamps[userKey] = msgTS;
-				// Si el mensaje es realmente nuevo (menos de NEW_MESSAGE_MAX_AGE_MS)
-				const age = Date.now() - msgTS;
-				if (age <= NEW_MESSAGE_MAX_AGE_MS) {
+				// Si el mensaje es posterior a lo último leído y realmente nuevo (menos de NEW_MESSAGE_MAX_AGE_MS)
+				const age = nowMs() - msgTS;
+				if (msgTS > readTs && age <= NEW_MESSAGE_MAX_AGE_MS) {
 					playNotificationSound();
 					if (userKey !== selectedUserKey) {
 						incrementUnread(userKey);
@@ -1298,6 +1326,10 @@
 			messagesScrollHandler = scrollHandler;
 			selectedUserKey = userKey;
 			clearUnread(userKey);
+			// Marcar como leído persistentemente al abrir el chat (solo admin)
+			if (currentUser.role === 'admin') {
+				markChatRead(userKey);
+			}
 			updateActiveChatHeader();
 			}
 
@@ -2121,6 +2153,10 @@
 						unsubscribeConversationsMeta();
 						unsubscribeConversationsMeta = null;
 					}
+					if (unsubscribeAdminReads) {
+						try { unsubscribeAdminReads(); } catch {}
+						unsubscribeAdminReads = null;
+					}
 					conversations = {};
 					userAliases = {};
 					conversationMeta = {};
@@ -2152,9 +2188,7 @@
 						}
 					});
 					newKeys.forEach(userKey => {
-						if (!unreadCounts[userKey]) {
-							unreadCounts[userKey] = 1;
-						}
+						// Notificar conversación nueva solo si realmente tiene algo no leído y reciente
 						notifyNewConversation(userKey);
 					});
 					const users = Array.from(combinedKeys).filter(u => {
@@ -2195,7 +2229,14 @@
 							preview.style.cssText = 'font-size:11px;color:#a0a6b7;margin-top:2px;text-align:left;';
 							btn.appendChild(preview);
 						}
-						const unreadCount = unreadCounts[userKey] || 0;
+						// Calcular no leídos: usar contador en memoria cuando exista (mensajes nuevos en esta sesión),
+						// o derivar 1/0 comparando lastMessageTs vs último leído persistido
+						let unreadCount = (typeof unreadCounts[userKey] === 'number') ? unreadCounts[userKey] : 0;
+						if (unreadCount === 0) {
+							const readTs = adminReadState[userKey] || 0;
+							const lastTs = (meta && typeof meta.lastMessageTs === 'number') ? meta.lastMessageTs : 0;
+							unreadCount = (lastTs > readTs && userKey !== selectedUserKey) ? 1 : 0;
+						}
 						if (unreadCount > 0) {
 							const badge = document.createElement('span');
 							badge.className = 'unread-badge';
@@ -2263,6 +2304,18 @@
 							conversationMeta = nextMeta;
 							renderUserList();
 						}, (err) => console.warn('Error suscribiendo metadata de conversaciones', err));
+					}
+					// Suscribirse a estado de lectura del admin
+					if (!unsubscribeAdminReads) {
+						try {
+							const readsDoc = doc(fs, 'adminState', 'reads');
+							unsubscribeAdminReads = onSnapshot(readsDoc, (snap) => {
+								adminReadState = snap.exists() ? (snap.data() || {}) : {};
+								renderUserList();
+							}, (err) => console.warn('Error suscribiendo admin reads', err));
+						} catch (err) {
+							console.warn('No se pudo suscribir a admin reads', err);
+						}
 					}
 					renderUserList();
 					const searchInput = document.getElementById('userSearch');
