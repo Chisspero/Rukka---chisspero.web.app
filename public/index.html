@@ -392,6 +392,7 @@
 					<div>
 						<span class="badge" id="roleBadge">Usuario</span>
 						<span class="badge" id="nameBadge">-</span>
+						<span class="badge" id="adminNoteBadge" style="display:none;"></span>
 
 						<button class="btn" id="logoutBtn" type="button" title="Cerrar sesión">Salir</button>
 					</div>
@@ -545,6 +546,7 @@
 		const loginError = document.getElementById('loginError');
 		const roleBadge = document.getElementById('roleBadge');
 		const nameBadge = document.getElementById('nameBadge');
+		const adminNoteBadge = document.getElementById('adminNoteBadge');
 		const messagesEl = document.getElementById('messages');
 		const shortcutsCard = document.getElementById('shortcutsCard');
 		const shortcutGanamos = document.getElementById('shortcutGanamos');
@@ -769,18 +771,21 @@
 			messageInput.value = '';
 			messageInput.focus();
 			if (isAdmin) {
+				if (adminNoteBadge) adminNoteBadge.style.display = '';
 				selectedUserKey = selectedUserKey || null;
 				ensureAdminSubscriptions();
 				// Solicitar permisos de notificaciones para el admin
 				requestNotificationPermission();
 				stopInactivityWatch && stopInactivityWatch();
 			} else {
+				if (adminNoteBadge) adminNoteBadge.style.display = 'none';
 				teardownAdminSubscriptions();
 				selectedUserKey = currentUser.name;
 				loadChat(selectedUserKey);
 				startInactivityWatch && startInactivityWatch();
 			}
 		} else {
+			if (adminNoteBadge) adminNoteBadge.style.display = 'none';
 			teardownAdminSubscriptions();
 			usernameEl.focus();
 			selectedUserKey = null;
