@@ -505,7 +505,7 @@
 
 	<script type="module">
 	import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js';
-	import { getDatabase, ref, push, serverTimestamp, onChildAdded, query, limitToLast, onValue, off, set, remove, get, update, orderByChild, endAt } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js';
+	import { getDatabase, ref, push, serverTimestamp, onChildAdded, query, limitToLast, limitToFirst, onValue, off, set, remove, get, update, orderByChild, endAt } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js';
 	import { getFirestore, collection, doc, addDoc, setDoc, deleteDoc, serverTimestamp as fsServerTimestamp, onSnapshot, where, query as fsQuery, getDocs, writeBatch, orderBy, limit as fsLimit, startAfter } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
 
 		const firebaseConfig = {
@@ -601,7 +601,6 @@
 	let conversations = {};
 	let userAliases = {};
 	let conversationMeta = {};
-	let unsubscribeConversations = null;
 	let unsubscribeAliases = null;
 	let unsubscribeConversationsMeta = null;
 	let cleanupTimerId = null;
@@ -800,24 +799,38 @@
 	}
 	async function runRealtimeCleanup() {
 		if (currentUser.role !== 'admin') return;
-		const conversationsSnapshot = conversations || {};
-		const retentionThreshold = Date.now() - REALTIME_RETENTION_MS;
-		let removals = [];
+		const retentionThreshold = nowMs() - REALTIME_RETENTION_MS;
 		let removedCount = 0;
-
-		for (const [chatKey, messages] of Object.entries(conversationsSnapshot)) {
-			if (removedCount >= CLEANUP_BATCH_LIMIT) break;
-			for (const [messageKey, message] of Object.entries(messages || {})) {
-				if (removedCount >= CLEANUP_BATCH_LIMIT) break;
-				const ts = (message && typeof message.ts === 'number') ? message.ts : null;
-				if (!ts || ts >= retentionThreshold) continue;
-				const messageRef = ref(db, `chat/conversaciones/${chatKey}/${messageKey}`);
-				removals.push(remove(messageRef).catch((err) => console.warn('Error al limpiar mensaje', err)));
-				removedCount += 1;
+		const candidateKeys = new Set([
+			...Object.keys(conversationMeta || {}),
+			...Object.keys(userAliases || {})
+		]);
+		for (const userKey of candidateKeys) {
+			if (!userKey || removedCount >= CLEANUP_BATCH_LIMIT) break;
+			const remainingBudget = CLEANUP_BATCH_LIMIT - removedCount;
+			if (remainingBudget <= 0) break;
+			const convRef = ref(db, `chat/conversaciones/${userKey}`);
+			try {
+				const snapshot = await get(query(
+					convRef,
+					orderByChild('ts'),
+					endAt(retentionThreshold - 1),
+					limitToFirst(Math.min(remainingBudget, 50))
+				));
+				const data = snapshot.val();
+				if (!data) continue;
+				const updates = {};
+				let localCount = 0;
+				for (const msgKey of Object.keys(data)) {
+					updates[`chat/conversaciones/${userKey}/${msgKey}`] = null;
+					localCount += 1;
+				}
+				if (!localCount) continue;
+				await update(ref(db), updates).catch((err) => console.warn('Error aplicando limpieza', err));
+				removedCount += localCount;
+			} catch (err) {
+				console.warn('Error obteniendo mensajes antiguos para limpieza', err);
 			}
-		}
-		if (removals.length) {
-			await Promise.allSettled(removals);
 		}
 	}
 
@@ -1079,25 +1092,6 @@
 			if (meta && meta.lastMessagePreview) {
 				return meta.lastMessagePreview;
 			}
-			const conv = conversations[userKey];
-			if (conv) {
-				const entries = Object.values(conv);
-				if (entries.length) {
-					let latest = null;
-					for (const item of entries) {
-						if (!item) continue;
-						const ts = typeof item.ts === 'number' ? item.ts : (typeof item.timestamp === 'number' ? item.timestamp : 0);
-						if (!latest || ts > (typeof latest.ts === 'number' ? latest.ts : (typeof latest.timestamp === 'number' ? latest.timestamp : 0))) {
-							latest = item;
-						}}
-					if (latest) {
-						if (latest.text) {
-							return latest.text.length > 50 ? latest.text.slice(0, 50) + '...' : latest.text;
-						}
-						if (latest.imageDataUrl || latest.imageUrl) return '📷 Imagen';
-						if (latest.audioDataUrl) return '🎤 Audio';
-					}
-				}}
 			return '';
 		}
 
@@ -2259,10 +2253,6 @@
 			function clearUserList() { userListEl.innerHTML = ''; }
 
 				function teardownAdminSubscriptions() {
-					if (unsubscribeConversations) {
-						unsubscribeConversations();
-						unsubscribeConversations = null;
-					}
 					if (unsubscribeAliases) {
 						unsubscribeAliases();
 						unsubscribeAliases = null;
@@ -2287,10 +2277,8 @@
 				function renderUserList() {
 					clearUserList();
 					const q = (document.getElementById('userSearch')?.value || '').trim().toLowerCase();
-					const combinedKeys = new Set([
-						...Object.keys(conversationMeta || {}),
-						...Object.keys(conversations || {})
-					]);
+					const combinedKeys = new Set(Object.keys(conversationMeta || {}));
+					Object.keys(userAliases || {}).forEach(key => combinedKeys.add(key));
 					const newKeys = [];
 					combinedKeys.forEach(userKey => {
 						if (!knownUserKeys.has(userKey)) {
@@ -2377,7 +2365,7 @@
 						};
 						userListEl.appendChild(btn);
 					});
-					if (!selectedUserKey || (!conversations[selectedUserKey] && !conversationMeta[selectedUserKey])) {
+					if (!selectedUserKey || !combinedKeys.has(selectedUserKey)) {
 						selectedUserKey = sortedUsers.length ? sortedUsers[0] : null;
 						if (selectedUserKey) {
 							loadChat(selectedUserKey);
@@ -2393,13 +2381,6 @@
 				}
 
 				function ensureAdminSubscriptions() {
-					if (!unsubscribeConversations) {
-						const convsRef = ref(db, 'chat/conversaciones');
-						unsubscribeConversations = onValue(convsRef, snap => {
-							conversations = snap.val() || {};
-							renderUserList();
-						});
-					}
 					if (!unsubscribeAliases) {
 						const aliasesRef = ref(db, 'chat/aliases');
 						unsubscribeAliases = onValue(aliasesRef, snap => {
