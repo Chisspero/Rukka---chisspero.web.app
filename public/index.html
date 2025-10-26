@@ -423,6 +423,17 @@
 								</div>
 							</div>
 						</div>
+						<!-- Vista previa de audio -->
+						<div class="image-preview" id="audioPreview" style="display:none">
+							<audio id="audioPreviewPlayer" controls style="width:140px"></audio>
+							<div class="info">
+								<div class="name" id="audioPreviewName">grabación</div>
+								<div class="actions">
+									<button class="btn" id="cancelAudioBtn" type="button">Cancelar</button>
+									<button class="btn primary" id="confirmAudioBtn" type="button">Enviar audio</button>
+								</div>
+							</div>
+						</div>
 						<div class="composer">
 							<input class="input" id="messageInput" type="text" placeholder="Escribe un mensaje y presiona Enter..." />
 							<button class="btn icon" id="audioBtn" type="button" title="Mantener para grabar">🎤</button>
@@ -572,6 +583,12 @@
 		const imagePreviewName = document.getElementById('imagePreviewName');
 		const confirmImageBtn = document.getElementById('confirmImageBtn');
 		const cancelImageBtn = document.getElementById('cancelImageBtn');
+		// Preview de audio
+		const audioPreview = document.getElementById('audioPreview');
+		const audioPreviewPlayer = document.getElementById('audioPreviewPlayer');
+		const audioPreviewName = document.getElementById('audioPreviewName');
+		const confirmAudioBtn = document.getElementById('confirmAudioBtn');
+		const cancelAudioBtn = document.getElementById('cancelAudioBtn');
 		const imgDialog = document.getElementById('imgDialog');
 		const imgDialogImg = document.getElementById('imgDialogImg');
 		// Avisos de horario
@@ -586,6 +603,8 @@
 		let audioChunks = [];
 		let recordingTimer = null;
 		let recordingStartedAt = 0;
+		let pendingAudioDataUrl = null;
+		let sendingAudio = false;
 
 		const USER1 = 'fundador666';
 		const USER2 = 'linea2bet';
@@ -1497,6 +1516,29 @@
 				cancelImageBtn.disabled = false;
 			}
 
+			function showAudioPreview(dataUrl, sizeKB) {
+				if (!audioPreview || !audioPreviewPlayer) return;
+				audioPreviewPlayer.pause();
+				audioPreviewPlayer.src = dataUrl;
+				try { audioPreviewPlayer.currentTime = 0; } catch {}
+				audioPreviewName.textContent = `grabación ~${sizeKB} KB`;
+				audioPreview.style.display = 'flex';
+				messagesEl.scrollTop = messagesEl.scrollHeight;
+				confirmAudioBtn.disabled = false;
+				cancelAudioBtn.disabled = false;
+			}
+
+			function clearAudioPreview() {
+				if (!audioPreview) return;
+				try { audioPreviewPlayer.pause(); } catch {}
+				audioPreviewPlayer.removeAttribute('src');
+				pendingAudioDataUrl = null;
+				audioPreview.style.display = 'none';
+				confirmAudioBtn.disabled = false;
+				cancelAudioBtn.disabled = false;
+				sendingAudio = false;
+			}
+
 			function formatDuration(ms) {
 				const total = Math.floor(ms / 1000);
 				const m = String(Math.floor(total / 60)).padStart(2, '0');
@@ -1540,7 +1582,7 @@
 			const sizeKB = Math.round(blob.size / 1024);
 
 			if (sizeKB < 3) { 
-				console.warn('Audio muy corto, no se envía');
+				console.warn('Audio muy corto, no se prepara vista previa');
 				mediaRecorder = null; 
 				audioChunks = []; 
 				return; 
@@ -1548,12 +1590,9 @@
 
 			const reader = new FileReader();
 			reader.onloadend = async () => {
-				const dataUrl = reader.result;
-				try {
-					await sendAudioMessage(dataUrl);
-				} catch (err) {
-					console.error('Error al enviar audio:', err);
-					alert('No se pudo subir el audio');
+				pendingAudioDataUrl = String(reader.result || '');
+				if (pendingAudioDataUrl) {
+					showAudioPreview(pendingAudioDataUrl, sizeKB);
 				}
 				mediaRecorder = null;
 				audioChunks = [];
@@ -1751,6 +1790,28 @@
 			cancelImageBtn.addEventListener('click', () => {
 				if (uploadingImage) return;
 				clearImagePreview();
+			});
+
+			// Confirm/Cancel audio
+			confirmAudioBtn.addEventListener('click', async () => {
+				if (!pendingAudioDataUrl || sendingAudio) return;
+				sendingAudio = true;
+				confirmAudioBtn.disabled = true;
+				cancelAudioBtn.disabled = true;
+				try {
+					await sendAudioMessage(pendingAudioDataUrl);
+					clearAudioPreview();
+				} catch (err) {
+					console.error('Error al enviar audio:', err);
+					alert('No se pudo subir el audio');
+					sendingAudio = false;
+					confirmAudioBtn.disabled = false;
+					cancelAudioBtn.disabled = false;
+				}
+			});
+			cancelAudioBtn.addEventListener('click', () => {
+				if (sendingAudio) return;
+				clearAudioPreview();
 			});
 
 			sendBtn.addEventListener('click', sendCurrentMessage);
