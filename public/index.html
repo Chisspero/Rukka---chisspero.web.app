@@ -623,6 +623,10 @@
 	let adminReadState = {}; // { userKey: lastReadTs }
 	let unsubscribeAdminReads = null;
 
+	// Índice de mensajes renderizados para acciones (p.ej., borrar)
+	// Mapa: uniqueId -> { msg, userKey }
+	let messageIndex = new Map();
+
 	// Sincronizar offset de reloj con RTDB para usar tiempos consistentes
 	onValue(ref(db, '.info/serverTimeOffset'), (snap) => {
 		try { serverTimeOffsetMs = Number(snap.val() || 0); } catch { serverTimeOffsetMs = 0; }
@@ -1163,9 +1167,10 @@
 					}
 				}
 
-				function appendMessage(msg) {
+				function appendMessage(id, msg, userKey) {
 				const wrap = document.createElement('div');
 				wrap.className = 'msg ' + (msg.role === 'admin' ? 'from-admin' : 'from-user');
+					if (id) wrap.dataset.id = String(id);
 				const meta = document.createElement('div');
 				meta.className = 'meta';
 				const name = document.createElement('span');
@@ -1179,6 +1184,30 @@
 				meta.appendChild(name);
 				meta.appendChild(role);
 				meta.appendChild(time);
+					// Botón eliminar para mensajes del admin (visible solo al admin)
+					if (currentUser.role === 'admin' && msg.role === 'admin' && id && userKey) {
+						const delBtn = document.createElement('button');
+						delBtn.type = 'button';
+						delBtn.className = 'btn';
+						delBtn.textContent = 'Eliminar';
+						delBtn.style.marginLeft = 'auto';
+						delBtn.style.padding = '4px 8px';
+						delBtn.style.fontSize = '12px';
+						delBtn.style.borderColor = '#2b3050';
+						delBtn.title = 'Eliminar este mensaje (solo los tuyos)';
+						delBtn.addEventListener('click', async (e) => {
+							e.preventDefault();
+							e.stopPropagation();
+							if (!confirm('¿Eliminar este mensaje?')) return;
+							try {
+								await deleteAdminMessage(id);
+								try { wrap.remove(); } catch {}
+							} catch (err) {
+								alert('No se pudo eliminar el mensaje');
+							}
+						});
+						meta.appendChild(delBtn);
+					}
 				wrap.appendChild(meta);
 				if (msg.type === 'image' && (msg.imageUrl || msg.imageDataUrl)) {
 					const imgWrap = document.createElement('div');
@@ -1247,18 +1276,61 @@
 				}
 			}
 
-			function appendMessageOnce(uniqueId, msg) {
+			function appendMessageOnce(uniqueId, msg, userKey) {
 				if (!uniqueId) {
 					uniqueId = (msg && msg.ts ? String(msg.ts) : String(Date.now())) + '|' + (msg && msg.text ? msg.text.slice(0,32) : '')
 				}
 				if (renderedMessageIds.has(uniqueId)) return;
 				renderedMessageIds.add(uniqueId);
-				appendMessage(msg);
+				messageIndex.set(uniqueId, { msg, userKey });
+				appendMessage(uniqueId, msg, userKey);
+			}
+
+			// Borrar un mensaje enviado por el admin (solo sus propios mensajes)
+			async function deleteAdminMessage(uniqueId) {
+				try {
+					if (!uniqueId) return;
+					if (currentUser.role !== 'admin') return; // doble chequeo en cliente
+					const info = messageIndex.get(uniqueId);
+					if (!info) return;
+					const { msg, userKey } = info;
+					if (!msg || msg.role !== 'admin') return; // solo borrar mensajes del admin
+
+					// 1) RTDB: borrar el mensaje en la conversación
+					try {
+						await remove(ref(db, `chat/conversaciones/${userKey}/${uniqueId}`));
+					} catch (err) {
+						console.warn('No se pudo borrar en Realtime DB (puede ser histórico):', err);
+					}
+
+					// 2) Firestore: borrar cualquier doc archivado que corresponda
+					try {
+						const colRef = collection(fs, 'mensajes');
+						// buscar por rtdbKey + userKeyNormalized para precisión
+						const q = fsQuery(colRef, where('rtdbKey', '==', uniqueId), where('userKeyNormalized', '==', (userKey || '').toLowerCase()));
+						const snap = await getDocs(q);
+						if (!snap.empty) {
+							const batch = writeBatch(fs);
+							snap.forEach(d => batch.delete(d.ref));
+							await batch.commit();
+						}
+					} catch (err) {
+						console.warn('No se pudo borrar en base de datos (historial):', err);
+					}
+
+					// Actualizar índices locales y UI
+					try { renderedMessageIds.delete(uniqueId); } catch {}
+					try { messageIndex.delete(uniqueId); } catch {}
+				} catch (err) {
+					console.error('Error al borrar el mensaje:', err);
+					throw err;
+				}
 			}
 
 			function clearChat() {
 							messagesEl.innerHTML = '';
 							renderedMessageIds = new Set();
+							messageIndex = new Map();
 							if (chatListener) {
 								try { off(chatListener.ref, 'child_added', chatListener.callback); } catch {}
 								chatListener = null;
@@ -1288,7 +1360,7 @@
 			const childAddedHandler = (snap) => {
 				const val = snap.val() || {};
 				if (!val.ts && val.timestamp) val.ts = val.timestamp;
-				appendMessageOnce(snap.key, val);
+				appendMessageOnce(snap.key, val, userKey);
 				handleNewMessage(userKey, val);
 			};
 			onChildAdded(convQuery, childAddedHandler);
@@ -1397,7 +1469,7 @@
 					rtdbKey: newRef.key || null,
 					createdAt: fsServerTimestamp()
 				});
-				appendMessageOnce(newRef.key, payload);
+				appendMessageOnce(newRef.key, payload, userChatKey);
 			} catch (e) {
 				console.warn('No se pudo archivar en la base de datos', e);
 			}
@@ -1620,7 +1692,7 @@
 						rtdbKey: newRef.key || null,
 						createdAt: fsServerTimestamp()
 					});
-					appendMessageOnce(newRef.key, payload);
+					appendMessageOnce(newRef.key, payload, userChatKey);
 				} catch (e) { console.warn('No se pudo archivar audio en base de datos:', e); }
 				try {
 					await upsertConversationMetadata(userChatKey, {
@@ -1678,7 +1750,7 @@
 							rtdbKey: newRef.key || null,
 							createdAt: fsServerTimestamp()
 						});
-						appendMessageOnce(newRef.key, payload);
+						appendMessageOnce(newRef.key, payload, userChatKey);
 					} catch (e) {
 						console.warn('No se pudo archivar imagen en base de datos:', e);
 					}
@@ -2113,7 +2185,7 @@
 						const startIndex = Math.max(0, entries.length - FIRESTORE_HISTORY_LIMIT);
 						for (let i = startIndex; i < entries.length; i++) {
 							const { id, msg } = entries[i];
-							appendMessageOnce(id, msg);
+							appendMessageOnce(id, msg, userKey);
 						}
 						const lastEntry = entries.length ? entries[entries.length - 1] : null;
 						if (lastEntry) {
