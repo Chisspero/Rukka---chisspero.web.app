@@ -507,7 +507,6 @@
 	import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js';
 	import { getDatabase, ref, push, serverTimestamp, onChildAdded, query, limitToLast, onValue, off, set, remove, get, update, orderByChild, endAt } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js';
 	import { getFirestore, collection, doc, addDoc, setDoc, deleteDoc, serverTimestamp as fsServerTimestamp, onSnapshot, where, query as fsQuery, getDocs, writeBatch, orderBy, limit as fsLimit, startAfter } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
-	import { getStorage, ref as storageRef, uploadBytes, uploadString, getDownloadURL, deleteObject } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-storage.js';
 
 		const firebaseConfig = {
 			apiKey: "AIzaSyB3Fjr_lu4mRECh_QCbF1thuVfTYkf42eQ",
@@ -523,7 +522,6 @@
 		const app = initializeApp(firebaseConfig);
 		const db = getDatabase(app);
 		const fs = getFirestore(app);
-		const storage = getStorage(app);
 		const loginCard = document.getElementById('loginCard');
 		const chatRow = document.getElementById('chatRow');
 		const chatCard = document.getElementById('chatCard');
@@ -611,38 +609,21 @@
 	let renderedMessageIds = new Set();
 	let messagesScrollHandler = null;
 	let inactivityTimerId = null;
-		let payload = null;
-		let storagePath = null;
-		try {
-			const safeUserKey = encodeURIComponent(userChatKey);
-			const fileId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-			storagePath = `attachments/${safeUserKey}/${fileId}.webm`;
-			const storageReference = storageRef(storage, storagePath);
-			await uploadBytes(storageReference, audioBlob, { contentType: 'audio/webm' });
-			const audioUrl = await getDownloadURL(storageReference);
-			payload = {
-				type: 'audio',
-				audioUrl,
-				storagePath,
-				sender: currentUser.role === 'admin' ? 'Administrador' : currentUser.name || 'Anónimo',
-				role: currentUser.role,
-				ts: nowMs(),
-				timestamp: serverTimestamp()
-			};
-		} catch (err) {
-			console.warn('No se pudo subir audio a Storage, se usa base64 fallback:', err);
-			const audioDataUrl = await blobToDataUrl(audioBlob);
-			payload = {
-				type: 'audio',
-				audioDataUrl,
-				storagePath: null,
-				sender: currentUser.role === 'admin' ? 'Administrador' : currentUser.name || 'Anónimo',
-				role: currentUser.role,
-				ts: nowMs(),
-				timestamp: serverTimestamp()
-			};
-			storagePath = null;
-		}
+	let inactivityHandlersBound = false;
+	let notificationSound = null; // buffer por defecto (Web Audio)
+	let customNotificationDataUrl = null; // data URL del sonido personalizado
+	let customNotificationAudio = null; // elemento de audio reutilizable
+	let pendingCustomSoundDataUrl = null; // data URL cargado en el diálogo, aún no guardado
+	let unreadCounts = {}; // { userKey: count }
+	let lastMessageTimestamps = {}; // Para detectar mensajes nuevos
+	let notificationsEnabled = false;
+	let audioContextSingleton = null;
+	let knownUserKeys = new Set();
+	let userListHydrated = false;
+	let isLoggedInFlag = false;
+	let serverTimeOffsetMs = 0; // delta de reloj con el servidor RTDB
+	// Estado de lectura persistente por chat (solo admin)
+	let adminReadState = {}; // { userKey: lastReadTs }
 	let unsubscribeAdminReads = null;
 
 	// Índice de mensajes renderizados para acciones (p.ej., borrar)
@@ -857,15 +838,10 @@
 
 			let updates = {};
 			let deletedRTDB = 0;
-			const storagePaths = [];
 			const FLUSH_EVERY = 500;
 
 			for (const [userKey, msgs] of Object.entries(convs)) {
 				for (const msgKey of Object.keys(msgs || {})) {
-					const message = (msgs || {})[msgKey];
-					if (message && message.storagePath) {
-						storagePaths.push(message.storagePath);
-					}
 					updates[`chat/conversaciones/${userKey}/${msgKey}`] = null;
 					deletedRTDB += 1;
 					if (deletedRTDB % FLUSH_EVERY === 0) {
@@ -876,16 +852,6 @@
 			}
 			if (Object.keys(updates).length) {
 				await update(ref(db), updates).catch(err => console.warn('Error aplicando lote final de borrado', err));
-			}
-			if (storagePaths.length) {
-				await Promise.allSettled(storagePaths.map((path) => {
-					try {
-						return deleteObject(storageRef(storage, path));
-					} catch (err) {
-						console.warn('Error preparando borrado de Storage:', err);
-						return Promise.resolve();
-					}
-				}));
 			}
 
 			// Ajustar metadata básica en Firestore para que no muestre previews viejos
@@ -1128,8 +1094,8 @@
 						if (latest.text) {
 							return latest.text.length > 50 ? latest.text.slice(0, 50) + '...' : latest.text;
 						}
-						if (latest.imageUrl || latest.imageDataUrl) return '📷 Imagen';
-						if (latest.audioUrl || latest.audioDataUrl) return '🎤 Audio';
+						if (latest.imageDataUrl || latest.imageUrl) return '📷 Imagen';
+						if (latest.audioDataUrl) return '🎤 Audio';
 					}
 				}}
 			return '';
@@ -1197,9 +1163,9 @@
 					let notifBody = '';
 					if (message.text) {
 						notifBody = message.text.length > 50 ? message.text.substring(0, 50) + '...' : message.text;
-					} else if (message.imageUrl || message.imageDataUrl) {
+					} else if (message.imageDataUrl) {
 						notifBody = '📷 Imagen';
-					} else if (message.audioUrl || message.audioDataUrl) {
+					} else if (message.audioDataUrl) {
 						notifBody = '🎤 Audio';
 					} else {
 						notifBody = 'Mensaje nuevo';
@@ -1286,8 +1252,7 @@
 						meta.appendChild(delBtn);
 					}
 				wrap.appendChild(meta);
-				const hasImage = !!(msg.imageUrl || msg.imageDataUrl);
-				if (hasImage) {
+				if (msg.type === 'image' && (msg.imageUrl || msg.imageDataUrl)) {
 					const imgWrap = document.createElement('div');
 					imgWrap.className = 'image-msg bubble';
 					const img = document.createElement('img');
@@ -1303,13 +1268,12 @@
 					imgWrap.appendChild(img);
 					wrap.appendChild(imgWrap);
 				}
-				const hasAudio = !!(msg.audioUrl || msg.audioDataUrl);
-				if (hasAudio) {
+				if (msg.type === 'audio' && (msg.audioDataUrl)) {
 					const aWrap = document.createElement('div');
 					aWrap.className = 'audio-msg bubble';
 					const audio = document.createElement('audio');
 					audio.controls = true;
-					audio.src = msg.audioUrl || msg.audioDataUrl;
+					audio.src = msg.audioDataUrl;
 					aWrap.appendChild(audio);
 					wrap.appendChild(aWrap);
 				}
@@ -1396,14 +1360,6 @@
 					} catch (err) {
 						console.warn('No se pudo borrar en base de datos (historial):', err);
 					}
-					// 3) Storage: borrar archivo asociado (si corresponde)
-					if (msg.storagePath) {
-						try {
-							await deleteObject(storageRef(storage, msg.storagePath));
-						} catch (err) {
-							console.warn('No se pudo borrar archivo adjunto en Storage:', err);
-						}
-					}
 
 					// Actualizar índices locales y UI
 					try { renderedMessageIds.delete(uniqueId); } catch {}
@@ -1474,7 +1430,7 @@
 					const entries = Object.entries(data);
 					for (const [key, val] of entries) {
 					if (!renderedMessageIds.has(key)) {
-						appendMessageOnce(key, val, userKey);
+						appendMessageOnce(key, val);
 					}
 					}
 				} catch (err) {
@@ -1497,7 +1453,7 @@
 
 			async function upsertConversationMetadata(userKey, info = {}) {
 				if (!userKey) return;
-				const type = info.type || (info.text ? 'text' : ((info.imageUrl || info.imageDataUrl || info.name) ? 'image' : ((info.audioUrl || info.audioDataUrl) ? 'audio' : 'text')));
+				const type = info.type || (info.text ? 'text' : (info.imageDataUrl || info.name) ? 'image' : info.audioDataUrl ? 'audio' : 'text');
 				let preview = null;
 				if (type === 'text') {
 					preview = (info.text || '').slice(0, 120);
@@ -1537,9 +1493,7 @@
 			} else {
 				userChatKey = currentUser.name;
 			}
-			if (!userChatKey) {
-				throw new Error('No hay un chat seleccionado');
-			}
+			if (!userChatKey) return;
 			const convRef = ref(db, 'chat/conversaciones/' + userChatKey);
 			const payload = {
 				text: trimmed,
@@ -1677,19 +1631,6 @@
 				return `${m}:${s}`;
 			}
 
-			function blobToDataUrl(blob) {
-				return new Promise((resolve, reject) => {
-					try {
-						const reader = new FileReader();
-						reader.onloadend = () => resolve(String(reader.result || ''));
-						reader.onerror = () => reject(reader.error || new Error('No se pudo leer el blob'));
-						reader.readAsDataURL(blob);
-					} catch (err) {
-						reject(err);
-					}
-				});
-			}
-
 			function startRecordingTimer() {
 				recordingStartedAt = Date.now();
 				recordingTimeEl.textContent = '00:00';
@@ -1732,14 +1673,19 @@
 				return; 
 			}
 
-			try {
-				await sendAudioMessage(blob);
-			} catch (err) {
-				console.error('Error al enviar audio:', err);
-				alert('No se pudo subir el audio');
-			}
-			mediaRecorder = null;
-			audioChunks = [];
+			const reader = new FileReader();
+			reader.onloadend = async () => {
+				const dataUrl = reader.result;
+				try {
+					await sendAudioMessage(dataUrl);
+				} catch (err) {
+					console.error('Error al enviar audio:', err);
+					alert('No se pudo subir el audio');
+				}
+				mediaRecorder = null;
+				audioChunks = [];
+			};
+			reader.readAsDataURL(blob);
 			};
 
 			mediaRecorder.start();
@@ -1761,7 +1707,7 @@
 				stopRecordingTimer();
 			}
 
-			async function sendAudioMessage(audioBlob) {
+			async function sendAudioMessage(audioDataUrl) {
 				let userChatKey = null;
 				if (currentUser.role === 'admin') {
 					if (!selectedUserKey) return;
@@ -1769,20 +1715,11 @@
 				} else {
 					userChatKey = currentUser.name;
 				}
-				if (!userChatKey) {
-					throw new Error('No hay un chat seleccionado');
-				}
+				if (!userChatKey) return;
 				const convRef = ref(db, 'chat/conversaciones/' + userChatKey);
-				const safeUserKey = encodeURIComponent(userChatKey);
-				const fileId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-				const storagePath = `attachments/${safeUserKey}/${fileId}.webm`;
-				const storageReference = storageRef(storage, storagePath);
-				await uploadBytes(storageReference, audioBlob, { contentType: 'audio/webm' });
-				const audioUrl = await getDownloadURL(storageReference);
 				const payload = {
 					type: 'audio',
-					audioUrl,
-					storagePath,
+					audioDataUrl,
 					sender: currentUser.role === 'admin' ? 'Administrador' : currentUser.name || 'Anónimo',
 					role: currentUser.role,
 					ts: nowMs(),
@@ -1825,41 +1762,21 @@
 					cancelImageBtn.disabled = true;
 					let userChatKey = null;
 					if (currentUser.role === 'admin') {
-						if (!selectedUserKey) {
-							throw new Error('No hay un chat seleccionado');
-						}
+						if (!selectedUserKey) return;
 						userChatKey = selectedUserKey;
 					} else {
 						userChatKey = currentUser.name;
 					}
-					if (!userChatKey) {
-						throw new Error('No hay un chat seleccionado');
-					}
+					if (!userChatKey) return;
 					const convRef = ref(db, 'chat/conversaciones/' + userChatKey);
 					const dataUrl = await compressImageToDataURL(file, { maxSize: 960, quality: 0.75 });
 					const approxBytes = Math.ceil((dataUrl.length - 'data:image/jpeg;base64,'.length) * 3 / 4);
 					if (approxBytes > 400 * 1024) {
 						throw new Error('La imagen es muy pesada');
 					}
-					let imageUrl = null;
-					let storagePath = null;
-					try {
-						const safeUserKey = encodeURIComponent(userChatKey);
-						const fileId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-						storagePath = `attachments/${safeUserKey}/${fileId}.jpg`;
-						const storageReference = storageRef(storage, storagePath);
-						await uploadString(storageReference, dataUrl, 'data_url', { contentType: 'image/jpeg' });
-						imageUrl = await getDownloadURL(storageReference);
-					} catch (err) {
-						console.warn('No se pudo subir imagen a Storage, se usa base64 fallback:', err);
-						storagePath = null;
-						imageUrl = null;
-					}
 					const payload = {
 						type: 'image',
-						imageUrl: imageUrl || null,
-						imageDataUrl: imageUrl ? null : dataUrl,
-						storagePath: imageUrl ? storagePath : null,
+						imageDataUrl: dataUrl,
 						name: file.name || null,
 						sender: currentUser.role === 'admin' ? 'Administrador' : currentUser.name || 'Anónimo',
 						role: currentUser.role,
@@ -2104,24 +2021,20 @@
 			}
 
 			function attemptOpenNotificationSettings() {
+				if (typeof window === 'undefined') return false;
 				try {
 					const ua = (navigator.userAgent || '').toLowerCase();
-					const origin = encodeURIComponent(window.location.origin);
-					if (ua.includes('edg')) {
-						window.open(`edge://settings/content/siteDetails?site=${origin}`, '_blank', 'noopener,noreferrer');
-						return true;
-					}
-					if (ua.includes('chrome') && !ua.includes('edg') && !ua.includes('opr')) {
-						window.open(`chrome://settings/content/siteDetails?site=${origin}`, '_blank', 'noopener,noreferrer');
-						return true;
-					}
-					if (ua.includes('firefox')) {
-						window.open('about:preferences#privacy', '_blank', 'noopener,noreferrer');
-						return true;
-					}
-					if (ua.includes('safari') && !ua.includes('chrome') && !ua.includes('crios')) {
-						alert('Abrí Ajustes > Safari > Notificaciones y habilitá este sitio manualmente.');
-						return false;
+					const mappings = [
+						{ match: (u) => u.includes('edg'), url: 'edge://settings/content/notifications' },
+						{ match: (u) => u.includes('opr') || u.includes('opera'), url: 'opera://settings/content/notifications' },
+						{ match: (u) => u.includes('chrome') && !u.includes('edg') && !u.includes('opr'), url: 'chrome://settings/content/notifications' },
+						{ match: (u) => u.includes('firefox'), url: 'about:preferences#privacy' }
+					];
+					for (const entry of mappings) {
+						if (entry.match(ua)) {
+							const popup = window.open(entry.url, '_blank');
+							return !!popup;
+						}
 					}
 				} catch (err) {
 					console.warn('No se pudo abrir la configuración de notificaciones:', err);
@@ -2296,20 +2209,15 @@
 							const id = data.rtdbKey || d.id;
 							const tsFromCreatedAt = data.createdAt && typeof data.createdAt.toMillis === 'function' ? data.createdAt.toMillis() : null;
 							const ts = (typeof data.ts === 'number') ? data.ts : (tsFromCreatedAt ?? (d.createTime ? d.createTime.toMillis() : Date.now()));
-							const hasImage = !!(data.imageUrl || data.imageDataUrl);
-							const hasAudio = !!(data.audioUrl || data.audioDataUrl);
-							const inferredType = data.type || (hasAudio ? 'audio' : (hasImage ? 'image' : (data.text ? 'text' : null)));
+							const inferredType = data.type || (data.audioDataUrl ? 'audio' : ((data.imageDataUrl || data.imageUrl) ? 'image' : (data.text ? 'text' : null)));
 							return {
 								id,
 								ts,
 								msg: {
 									type: inferredType || undefined,
 									text: data.text || null,
-									imageUrl: data.imageUrl || null,
-									imageDataUrl: data.imageDataUrl || null,
-									audioUrl: data.audioUrl || null,
+									imageDataUrl: data.imageDataUrl || data.imageUrl || null,
 									audioDataUrl: data.audioDataUrl || null,
-									storagePath: data.storagePath || null,
 									name: data.name || null,
 									sender: data.sender || 'Anónimo',
 									role: data.role || 'user',
@@ -2325,7 +2233,7 @@
 						const lastEntry = entries.length ? entries[entries.length - 1] : null;
 						if (lastEntry) {
 							const msg = lastEntry.msg || {};
-							const type = (msg.audioUrl || msg.audioDataUrl) ? 'audio' : ((msg.imageUrl || msg.imageDataUrl) ? 'image' : 'text');
+							const type = msg.audioDataUrl ? 'audio' : (msg.imageDataUrl ? 'image' : 'text');
 							upsertConversationMetadata(userKey, {
 								type,
 								text: msg.text || null,
@@ -2601,7 +2509,6 @@
 					}
 
 					async function deleteUserChat(userKey) {
-						const existingMessages = conversations && conversations[userKey] ? Object.values(conversations[userKey]) : [];
 						try {
 							await remove(ref(db, 'chat/conversaciones/' + userKey));
 							await remove(ref(db, 'chat/aliases/' + (userKey || '').toLowerCase()));
@@ -2612,21 +2519,6 @@
 							await deleteDoc(doc(fs, 'conversaciones', userKey));
 						} catch (err) {
 							console.warn('No se pudo borrar metadata en base de datos:', err);
-						}
-						try {
-							if (existingMessages && existingMessages.length) {
-								await Promise.allSettled(existingMessages.map(msg => {
-									if (!msg || !msg.storagePath) return Promise.resolve();
-									try {
-										return deleteObject(storageRef(storage, msg.storagePath));
-									} catch (err) {
-										console.warn('No se pudo preparar borrado de Storage para chat:', err);
-										return Promise.resolve();
-									}
-								}));
-							}
-						} catch (err) {
-							console.warn('No se pudieron borrar archivos adjuntos en Storage:', err);
 						}
 						delete conversationMeta[userKey];
 						renderUserList();
