@@ -183,7 +183,7 @@
 			border-radius: 12px;
 			padding: 10px;
 			width: min(520px, 92%);
-			margin: 0 auto; /* centrar */
+			margin: 8px auto 10px; /* centrar y separaciones */
 			display: none; /* visible solo para admin por JS */
 		}
 		.admin-note .admin-note-title { font-size: 14px; font-weight: 700; margin-bottom: 6px; color: #e6e9f3; text-align: center; }
@@ -423,6 +423,16 @@
 						<div id="userList" style="display:flex;flex-direction:column;gap:6px;"></div>
 					</div>
 					<div class="chat-wrapper" style="flex:1;">
+						<!-- Nota del administrador por chat (solo visible para admin) - arriba, centrada -->
+						<div class="admin-note" id="adminNoteBox" style="display:none">
+							<div class="admin-note-title">Nota para este chat (solo visible para vos)</div>
+							<textarea id="adminNoteInput" placeholder="Escribí tu nota…"></textarea>
+							<div class="actions">
+								<button class="btn" id="adminNoteClear" type="button">Borrar</button>
+								<button class="btn primary" id="adminNoteSave" type="button">Guardar</button>
+							</div>
+							<div class="admin-note-status" id="adminNoteStatus"></div>
+						</div>
 						<div class="messages" id="messages"></div>
 						<div class="recording" id="recordingBar">
 							<div class="dot"></div>
@@ -440,16 +450,6 @@
 							</div>
 						</div>
 
-						<!-- Nota del administrador por chat (solo visible para admin) -->
-						<div class="admin-note" id="adminNoteBox" style="display:none">
-							<div class="admin-note-title">Nota para este chat (solo visible para vos)</div>
-							<textarea id="adminNoteInput" placeholder="Escribí tu nota…"></textarea>
-							<div class="actions">
-								<button class="btn" id="adminNoteClear" type="button">Borrar</button>
-								<button class="btn primary" id="adminNoteSave" type="button">Guardar</button>
-							</div>
-							<div class="admin-note-status" id="adminNoteStatus"></div>
-						</div>
 						<!-- Vista previa de audio -->
 						<div class="image-preview" id="audioPreview" style="display:none">
 							<audio id="audioPreviewPlayer" controls style="width:140px"></audio>
@@ -679,6 +679,7 @@
 	let unsubscribeAdminReads = null;
 	let unsubscribeAdminNote = null;
 	let adminNoteStatusTimer = null;
+	let adminNoteDebounceTimer = null;
 
 	// Índice de mensajes renderizados para acciones (p.ej., borrar)
 	// Mapa: uniqueId -> { msg, userKey }
@@ -852,13 +853,28 @@
 			unsubscribeAdminNote = onSnapshot(noteDoc, (snap) => {
 				const data = snap.exists() ? (snap.data() || {}) : {};
 				const txt = (typeof data.note === 'string') ? data.note : '';
-				if (adminNoteInput) adminNoteInput.value = txt;
+				if (adminNoteInput && adminNoteInput.value !== txt) adminNoteInput.value = txt;
 				if (adminNoteStatus) adminNoteStatus.textContent = txt ? 'Cargado' : '';
 			}, (err) => {
 				console.warn('Error suscribiendo nota admin:', err);
 			});
 		} catch (err) {
 			console.warn('No se pudo suscribir a la nota del admin:', err);
+		}
+	}
+
+	async function saveAdminNote(noteText) {
+		try {
+			if (currentUser.role !== 'admin' || !selectedUserKey) return;
+			await setDoc(doc(fs, 'adminNotes', String(selectedUserKey)), { note: String(noteText || ''), updatedAt: fsServerTimestamp() }, { merge: true });
+			if (adminNoteStatus) {
+				adminNoteStatus.textContent = 'Guardado';
+				try { clearTimeout(adminNoteStatusTimer); } catch {}
+				adminNoteStatusTimer = setTimeout(() => { if (adminNoteStatus) adminNoteStatus.textContent = ''; }, 1200);
+			}
+		} catch (err) {
+			console.warn('No se pudo guardar la nota:', err);
+			alert('No se pudo guardar la nota');
 		}
 	}
 	async function runCajeroClear() {
@@ -1898,20 +1914,9 @@
 						const note = adminNoteInput ? (adminNoteInput.value || '') : '';
 						adminNoteSave.disabled = true;
 						if (adminNoteClear) adminNoteClear.disabled = true;
-						try {
-							await setDoc(doc(fs, 'adminNotes', String(selectedUserKey)), { note, updatedAt: fsServerTimestamp() }, { merge: true });
-							if (adminNoteStatus) {
-								adminNoteStatus.textContent = 'Guardado';
-								try { clearTimeout(adminNoteStatusTimer); } catch {}
-								adminNoteStatusTimer = setTimeout(() => { if (adminNoteStatus) adminNoteStatus.textContent = ''; }, 1500);
-							}
-						} catch (err) {
-							console.warn('No se pudo guardar la nota:', err);
-							alert('No se pudo guardar la nota');
-						} finally {
-							adminNoteSave.disabled = false;
-							if (adminNoteClear) adminNoteClear.disabled = false;
-						}
+						await saveAdminNote(note);
+						adminNoteSave.disabled = false;
+						if (adminNoteClear) adminNoteClear.disabled = false;
 					});
 					adminNoteSave.dataset.bound = '1';
 				}
@@ -1937,6 +1942,20 @@
 						}
 					});
 					adminNoteClear.dataset.bound = '1';
+				}
+
+				// Autosave en tiempo real con debounce
+				if (adminNoteInput && !adminNoteInput.dataset.bound) {
+					adminNoteInput.addEventListener('input', () => {
+						if (currentUser.role !== 'admin' || !selectedUserKey) return;
+						if (adminNoteStatus) adminNoteStatus.textContent = 'Guardando…';
+						try { clearTimeout(adminNoteDebounceTimer); } catch {}
+						adminNoteDebounceTimer = setTimeout(() => {
+							const note = adminNoteInput.value || '';
+							saveAdminNote(note);
+						}, 500);
+					});
+					adminNoteInput.dataset.bound = '1';
 				}
 
 			sendBtn.addEventListener('click', sendCurrentMessage);
