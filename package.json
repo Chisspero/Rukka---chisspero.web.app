@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "deploy": "^1.0.3",
+    "firebase": "^12.4.0"
+  }
+}
