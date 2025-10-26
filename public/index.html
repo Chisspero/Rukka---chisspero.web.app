@@ -73,6 +73,22 @@
         /* Permitir copiar el nombre con un clic */
         #nameBadge { cursor: pointer; user-select: none; }
         #nameBadge.copied { border-color: rgba(156,134,255,0.6); box-shadow: 0 0 0 2px rgba(156,134,255,0.2) inset; }
+		/* Toast de copiado */
+		.copy-toast {
+			position: fixed;
+			z-index: 10000;
+			background: linear-gradient(180deg, #141726, #101320);
+			border: 1px solid var(--border);
+			color: #e6e9f3;
+			padding: 6px 10px;
+			border-radius: 8px;
+			box-shadow: 0 6px 16px rgba(0,0,0,0.25);
+			font-size: 12px;
+			pointer-events: none;
+			opacity: 0;
+			transform: translate(-50%, -6px);
+			transition: opacity .2s ease, transform .2s ease;
+		}
 		.content { padding: 18px; }
 		.login-grid { display: grid; gap: 12px; }
 		.field { display: grid; gap: 6px; }
@@ -851,6 +867,34 @@
 			return notificationSound;
 		}
 		function playNotificationSound() {
+
+			// Toast de "Copiado" posicionado cerca del badge
+			let copyToastEl = null;
+			let copyToastTimer = null;
+			function showCopyToast(targetEl, msg = 'Copiado'){
+				try {
+					if (!targetEl) return;
+					if (copyToastTimer) { clearTimeout(copyToastTimer); copyToastTimer = null; }
+					if (copyToastEl && copyToastEl.parentNode) { copyToastEl.parentNode.removeChild(copyToastEl); }
+					copyToastEl = document.createElement('div');
+					copyToastEl.className = 'copy-toast';
+					copyToastEl.textContent = msg;
+					document.body.appendChild(copyToastEl);
+					const r = targetEl.getBoundingClientRect();
+					copyToastEl.style.left = (r.left + r.width/2) + 'px';
+					copyToastEl.style.top = (Math.max(8, r.top - 12)) + 'px';
+					// Forzar reflow para animación
+					void copyToastEl.offsetWidth;
+					copyToastEl.style.opacity = '1';
+					copyToastEl.style.transform = 'translate(-50%, -10px)';
+					copyToastTimer = setTimeout(() => {
+						if (!copyToastEl) return;
+						copyToastEl.style.opacity = '0';
+						copyToastEl.style.transform = 'translate(-50%, -18px)';
+						setTimeout(() => { try { copyToastEl.remove(); } catch {}; copyToastEl = null; }, 250);
+					}, 1000);
+				} catch {}
+			}
 			// Si hay sonido personalizado, usarlo
 			if (customNotificationDataUrl) {
 				try {
@@ -1076,30 +1120,26 @@
 				if (!userKey) return userKey;
 				return userAliases[userKey] || userAliases[(userKey.toLowerCase ? userKey.toLowerCase() : userKey)] || userKey;
 			} 			function updateActiveChatHeader() {
+					let baseName = '-';
 					if (selectedUserKey) {
-						nameBadge.textContent = getDisplayName(selectedUserKey) || selectedUserKey || '-';
-					} else if (currentUser.role === 'admin') {
-						nameBadge.textContent = '-';
-					} else {
-						nameBadge.textContent = currentUser.name || '-';
+						baseName = getDisplayName(selectedUserKey) || selectedUserKey || '-';
+					} else if (currentUser.role !== 'admin') {
+						baseName = currentUser.name || '-';
 					}
+					nameBadge.textContent = baseName;
+					try { nameBadge.dataset.base = baseName; } catch {}
 				}
 
-				// Hacer clic en el nombre para copiarlo
-				if (nameBadge) {
+				// Hacer clic en el nombre para copiarlo (sin modificar el texto)
+				if (nameBadge && !nameBadge.dataset.bound) {
 					nameBadge.title = 'Copiar nombre';
 					nameBadge.addEventListener('click', async () => {
-						const txt = (nameBadge.textContent || '').trim();
-						if (!txt || txt === '-') return;
-						const prev = nameBadge.textContent;
-						const ok = await copyToClipboard(txt);
-						nameBadge.classList.add('copied');
-						nameBadge.textContent = ok ? `${txt} ✓` : txt;
-						setTimeout(() => {
-							nameBadge.textContent = prev;
-							nameBadge.classList.remove('copied');
-						}, 1200);
+						const base = (nameBadge.dataset && nameBadge.dataset.base) ? nameBadge.dataset.base : (nameBadge.textContent || '').replace(/\s*✓+\s*$/g,'').trim();
+						if (!base || base === '-') return;
+						const ok = await copyToClipboard(base);
+						showCopyToast(nameBadge, ok ? 'Copiado' : 'No se pudo copiar');
 					});
+					nameBadge.dataset.bound = '1';
 				}
 
 				function appendMessage(id, msg, userKey) {
