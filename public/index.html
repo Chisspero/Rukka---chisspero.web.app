@@ -176,6 +176,21 @@
 			filter: invert(0.85) hue-rotate(200deg) saturate(0.7);
 		}
 
+		/* Nota del admin (pequeña y centrada) */
+		.admin-note {
+			background: linear-gradient(180deg, #121424, #0f111a);
+			border: 1px solid var(--border);
+			border-radius: 12px;
+			padding: 10px;
+			width: min(520px, 92%);
+			margin: 0 auto; /* centrar */
+			display: none; /* visible solo para admin por JS */
+		}
+		.admin-note .admin-note-title { font-size: 14px; font-weight: 700; margin-bottom: 6px; color: #e6e9f3; text-align: center; }
+		#adminNoteInput { width: 100%; min-height: 64px; resize: vertical; background: #0e0e0f; color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 10px; }
+		.admin-note .actions { margin-top: 8px; display: flex; gap: 8px; justify-content: flex-end; }
+		.admin-note-status { font-size: 12px; color: #a9b2c0; margin-top: 6px; text-align: right; min-height: 16px; }
+
 		/* Preview de imagen antes de enviar */
 		.image-preview {
 			background: linear-gradient(180deg, #121424, #0f111a);
@@ -424,6 +439,17 @@
 								</div>
 							</div>
 						</div>
+
+						<!-- Nota del administrador por chat (solo visible para admin) -->
+						<div class="admin-note" id="adminNoteBox" style="display:none">
+							<div class="admin-note-title">Nota para este chat (solo visible para vos)</div>
+							<textarea id="adminNoteInput" placeholder="Escribí tu nota…"></textarea>
+							<div class="actions">
+								<button class="btn" id="adminNoteClear" type="button">Borrar</button>
+								<button class="btn primary" id="adminNoteSave" type="button">Guardar</button>
+							</div>
+							<div class="admin-note-status" id="adminNoteStatus"></div>
+						</div>
 						<!-- Vista previa de audio -->
 						<div class="image-preview" id="audioPreview" style="display:none">
 							<audio id="audioPreviewPlayer" controls style="width:140px"></audio>
@@ -584,6 +610,12 @@
 		const imagePreviewName = document.getElementById('imagePreviewName');
 		const confirmImageBtn = document.getElementById('confirmImageBtn');
 		const cancelImageBtn = document.getElementById('cancelImageBtn');
+		// Admin note elements
+		const adminNoteBox = document.getElementById('adminNoteBox');
+		const adminNoteInput = document.getElementById('adminNoteInput');
+		const adminNoteSave = document.getElementById('adminNoteSave');
+		const adminNoteClear = document.getElementById('adminNoteClear');
+		const adminNoteStatus = document.getElementById('adminNoteStatus');
 		// Preview de audio
 		const audioPreview = document.getElementById('audioPreview');
 		const audioPreviewPlayer = document.getElementById('audioPreviewPlayer');
@@ -645,6 +677,8 @@
 	// Estado de lectura persistente por chat (solo admin)
 	let adminReadState = {}; // { userKey: lastReadTs }
 	let unsubscribeAdminReads = null;
+	let unsubscribeAdminNote = null;
+	let adminNoteStatusTimer = null;
 
 	// Índice de mensajes renderizados para acciones (p.ej., borrar)
 	// Mapa: uniqueId -> { msg, userKey }
@@ -764,6 +798,16 @@
 		document.getElementById('userListPanel').style.display = (isLoggedIn && isAdmin) ? '' : 'none';
 		if (shortcutsCard) shortcutsCard.style.display = (isLoggedIn && isAdmin) ? '' : 'none';
 
+			// Mostrar/ocultar caja de nota del admin según estado actual
+			if (adminNoteBox) {
+				const shouldShow = isLoggedIn && isAdmin && !!selectedUserKey;
+				adminNoteBox.style.display = shouldShow ? '' : 'none';
+				if (!shouldShow) {
+					try { adminNoteInput.value = ''; } catch {}
+					if (adminNoteStatus) adminNoteStatus.textContent = '';
+				}
+			}
+
 		if (isLoggedIn) {
 			roleBadge.textContent = isAdmin ? 'Administrador' : 'Usuario';
 			messageInput.value = '';
@@ -771,6 +815,8 @@
 			if (isAdmin) {
 				selectedUserKey = selectedUserKey || null;
 				ensureAdminSubscriptions();
+				// Suscripción a nota del admin si ya hay chat seleccionado
+				if (selectedUserKey) subscribeAdminNote(selectedUserKey);
 				// Solicitar permisos de notificaciones para el admin
 				requestNotificationPermission();
 				stopInactivityWatch && stopInactivityWatch();
@@ -791,6 +837,29 @@
 
 		updateActiveChatHeader();
 		updateClosedStateUI();
+	}
+
+	// --- Nota del administrador por chat ---
+	function subscribeAdminNote(userKey) {
+		try {
+			if (unsubscribeAdminNote) { try { unsubscribeAdminNote(); } catch {} unsubscribeAdminNote = null; }
+			if (!userKey || currentUser.role !== 'admin') {
+				if (adminNoteInput) adminNoteInput.value = '';
+				if (adminNoteStatus) adminNoteStatus.textContent = '';
+				return;
+			}
+			const noteDoc = doc(fs, 'adminNotes', String(userKey));
+			unsubscribeAdminNote = onSnapshot(noteDoc, (snap) => {
+				const data = snap.exists() ? (snap.data() || {}) : {};
+				const txt = (typeof data.note === 'string') ? data.note : '';
+				if (adminNoteInput) adminNoteInput.value = txt;
+				if (adminNoteStatus) adminNoteStatus.textContent = txt ? 'Cargado' : '';
+			}, (err) => {
+				console.warn('Error suscribiendo nota admin:', err);
+			});
+		} catch (err) {
+			console.warn('No se pudo suscribir a la nota del admin:', err);
+		}
 	}
 	async function runCajeroClear() {
 		if (currentUser.role !== 'admin') return { deletedRTDB: 0, deletedFS: 0 };
@@ -1335,11 +1404,20 @@
 			messagesScrollHandler = scrollHandler;
 			selectedUserKey = userKey;
 			clearUnread(userKey);
+			// Nota del admin: suscribirse a la nota de este chat (solo admin)
+			if (currentUser.role === 'admin') {
+				subscribeAdminNote(userKey);
+			}
 			// Marcar como leído persistentemente al abrir el chat (solo admin)
 			if (currentUser.role === 'admin') {
 				markChatRead(userKey);
 			}
 			updateActiveChatHeader();
+			// Mostrar/ocultar caja de nota según selección
+			if (adminNoteBox) {
+				const shouldShow = isLoggedInFlag && currentUser.role === 'admin' && !!selectedUserKey;
+				adminNoteBox.style.display = shouldShow ? '' : 'none';
+			}
 			}
 
 			async function upsertConversationMetadata(userKey, info = {}) {
@@ -1813,6 +1891,54 @@
 				clearAudioPreview();
 			});
 
+				// Admin: guardar/borrar nota por chat
+				if (adminNoteSave && !adminNoteSave.dataset.bound) {
+					adminNoteSave.addEventListener('click', async () => {
+						if (currentUser.role !== 'admin' || !selectedUserKey) return;
+						const note = adminNoteInput ? (adminNoteInput.value || '') : '';
+						adminNoteSave.disabled = true;
+						if (adminNoteClear) adminNoteClear.disabled = true;
+						try {
+							await setDoc(doc(fs, 'adminNotes', String(selectedUserKey)), { note, updatedAt: fsServerTimestamp() }, { merge: true });
+							if (adminNoteStatus) {
+								adminNoteStatus.textContent = 'Guardado';
+								try { clearTimeout(adminNoteStatusTimer); } catch {}
+								adminNoteStatusTimer = setTimeout(() => { if (adminNoteStatus) adminNoteStatus.textContent = ''; }, 1500);
+							}
+						} catch (err) {
+							console.warn('No se pudo guardar la nota:', err);
+							alert('No se pudo guardar la nota');
+						} finally {
+							adminNoteSave.disabled = false;
+							if (adminNoteClear) adminNoteClear.disabled = false;
+						}
+					});
+					adminNoteSave.dataset.bound = '1';
+				}
+				if (adminNoteClear && !adminNoteClear.dataset.bound) {
+					adminNoteClear.addEventListener('click', async () => {
+						if (currentUser.role !== 'admin' || !selectedUserKey) return;
+						adminNoteClear.disabled = true;
+						if (adminNoteSave) adminNoteSave.disabled = true;
+						try {
+							await deleteDoc(doc(fs, 'adminNotes', String(selectedUserKey)));
+							if (adminNoteInput) adminNoteInput.value = '';
+							if (adminNoteStatus) {
+								adminNoteStatus.textContent = 'Borrado';
+								try { clearTimeout(adminNoteStatusTimer); } catch {}
+								adminNoteStatusTimer = setTimeout(() => { if (adminNoteStatus) adminNoteStatus.textContent = ''; }, 1200);
+							}
+						} catch (err) {
+							console.warn('No se pudo borrar la nota:', err);
+							alert('No se pudo borrar la nota');
+						} finally {
+							adminNoteClear.disabled = false;
+							if (adminNoteSave) adminNoteSave.disabled = false;
+						}
+					});
+					adminNoteClear.dataset.bound = '1';
+				}
+
 			sendBtn.addEventListener('click', sendCurrentMessage);
 			messageInput.addEventListener('keydown', (e) => {
 				if (e.key === 'Enter') {
@@ -2204,12 +2330,19 @@
 						try { unsubscribeAdminReads(); } catch {}
 						unsubscribeAdminReads = null;
 					}
+							if (unsubscribeAdminNote) {
+								try { unsubscribeAdminNote(); } catch {}
+								unsubscribeAdminNote = null;
+							}
 					conversations = {};
 					userAliases = {};
 					conversationMeta = {};
 					knownUserKeys = new Set();
 					userListHydrated = false;
 					closeContextMenu();
+							// Limpiar nota de admin en UI
+							if (adminNoteInput) adminNoteInput.value = '';
+							if (adminNoteStatus) adminNoteStatus.textContent = '';
 				}
 
 				function renderUserList() {
