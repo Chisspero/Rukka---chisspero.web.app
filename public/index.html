@@ -184,6 +184,10 @@
 			padding: 10px;
 			width: min(520px, 92%);
 			margin: 8px auto 10px; /* centrar y separaciones */
+			position: sticky; /* se mantiene visible en el tope del panel */
+			top: 0;
+			z-index: 5;
+			box-shadow: 0 10px 22px rgba(0,0,0,0.35);
 			display: none; /* visible solo para admin por JS */
 		}
 		.admin-note .admin-note-title { font-size: 14px; font-weight: 700; margin-bottom: 6px; color: #e6e9f3; text-align: center; }
@@ -801,11 +805,17 @@
 
 			// Mostrar/ocultar caja de nota del admin según estado actual
 			if (adminNoteBox) {
-				const shouldShow = isLoggedIn && isAdmin && !!selectedUserKey;
+				const shouldShow = isLoggedIn && isAdmin; // siempre visible para admin
 				adminNoteBox.style.display = shouldShow ? '' : 'none';
 				if (!shouldShow) {
 					try { adminNoteInput.value = ''; } catch {}
 					if (adminNoteStatus) adminNoteStatus.textContent = '';
+				}
+				else {
+					// Mostrar estado si aún no hay chat seleccionado
+					if (!selectedUserKey && adminNoteStatus) {
+						adminNoteStatus.textContent = 'Seleccioná un chat para guardar';
+					}
 				}
 			}
 
@@ -1429,10 +1439,10 @@
 				markChatRead(userKey);
 			}
 			updateActiveChatHeader();
-			// Mostrar/ocultar caja de nota según selección
-			if (adminNoteBox) {
-				const shouldShow = isLoggedInFlag && currentUser.role === 'admin' && !!selectedUserKey;
-				adminNoteBox.style.display = shouldShow ? '' : 'none';
+			// Mantener nota siempre visible para admin
+			if (adminNoteBox && currentUser.role === 'admin') {
+				adminNoteBox.style.display = '';
+				if (adminNoteStatus) adminNoteStatus.textContent = '';
 			}
 			}
 
