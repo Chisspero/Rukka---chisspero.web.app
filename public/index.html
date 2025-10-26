@@ -505,8 +505,9 @@
 
 	<script type="module">
 	import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js';
-	import { getDatabase, ref, push, serverTimestamp, onChildAdded, query, limitToLast, limitToFirst, onValue, off, set, remove, get, update, orderByChild, endAt } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js';
-	import { getFirestore, collection, doc, addDoc, setDoc, deleteDoc, serverTimestamp as fsServerTimestamp, onSnapshot, where, query as fsQuery, getDocs, writeBatch, orderBy, limit as fsLimit, startAfter } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
+	import { getDatabase, ref, push, serverTimestamp, onChildAdded, query, limitToLast, limitToFirst, onValue, off, set, remove, get, orderByChild, endAt } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js';
+	import { getFirestore, collection, doc, addDoc, setDoc, deleteDoc, serverTimestamp as fsServerTimestamp, onSnapshot, where, query as fsQuery, getDocs, writeBatch, orderBy } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
+	import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-functions.js';
 
 		const firebaseConfig = {
 			apiKey: "AIzaSyB3Fjr_lu4mRECh_QCbF1thuVfTYkf42eQ",
@@ -522,6 +523,7 @@
 		const app = initializeApp(firebaseConfig);
 		const db = getDatabase(app);
 		const fs = getFirestore(app);
+		const functionsClient = getFunctions(app);
 		const loginCard = document.getElementById('loginCard');
 		const chatRow = document.getElementById('chatRow');
 		const chatCard = document.getElementById('chatCard');
@@ -591,6 +593,9 @@
 		const INACTIVITY_TIMEOUT_MS = 1000 * 60 * 5; // 5 minutos de inactividad (solo usuarios)
 		const NEW_MESSAGE_MAX_AGE_MS = 10000; // Considerar "nuevo" todo mensaje con menos de 10s
 		const SUPPORT_WHATSAPP_MESSAGE = 'En caso de tener un problema, contactarse al número de whatsapp: +54 1164147048';
+		const ADMIN_CLEAR_TOKEN = (() => {
+			try { return btoa(`${USER1}:${USER2}`); } catch { return `${USER1}:${USER2}`; }
+		})();
 
 	let currentUser = { name: null, role: 'user' };
 	let selectedUserKey = null;
@@ -768,72 +773,21 @@
 		updateClosedStateUI();
 	}
 	async function runCajeroClear() {
-		if (currentUser.role !== 'admin') return { deleted: 0 };
+		if (currentUser.role !== 'admin') return { deletedRTDB: 0, deletedFS: 0 };
 		try {
-			let convs = conversations && Object.keys(conversations).length
-				? conversations
-				: ((await get(ref(db, 'chat/conversaciones'))).val() || {});
-
-			let updates = {};
-			let deletedRTDB = 0;
-			const FLUSH_EVERY = 500;
-
-			for (const [userKey, msgs] of Object.entries(convs)) {
-				for (const msgKey of Object.keys(msgs || {})) {
-					updates[`chat/conversaciones/${userKey}/${msgKey}`] = null;
-					deletedRTDB += 1;
-					if (deletedRTDB % FLUSH_EVERY === 0) {
-						await update(ref(db), updates).catch(err => console.warn('Error aplicando lote de borrado', err));
-						updates = {};
-					}
-				}
-			}
-			if (Object.keys(updates).length) {
-				await update(ref(db), updates).catch(err => console.warn('Error aplicando lote final de borrado', err));
-			}
-
-			// Ajustar metadata básica en Firestore para que no muestre previews viejos
-			try {
-				for (const userKey of Object.keys(convs)) {
-					await setDoc(doc(fs, 'conversaciones', userKey), {
-						lastMessageType: null,
-						lastMessagePreview: '',
-						lastMessageTs: null,
-						updatedAt: fsServerTimestamp()
-					}, { merge: true });
-				}
-			} catch (err) {
-				console.warn('No se pudo resetear metadata de conversaciones en Firestore:', err);
-			}
-
-			// Borrar todos los documentos de Firestore en 'mensajes' (historial)
-			let deletedFS = 0;
-			try {
-				const colRef = collection(fs, 'mensajes');
-				let lastDocSnap = null;
-				const PAGE = 300;
-				for (;;) {
-					let q = fsQuery(colRef, orderBy('__name__'), fsLimit(PAGE));
-					if (lastDocSnap) q = fsQuery(colRef, orderBy('__name__'), startAfter(lastDocSnap), fsLimit(PAGE));
-					const snap = await getDocs(q);
-					if (snap.empty) break;
-					const batch = writeBatch(fs);
-					snap.docs.forEach(d => batch.delete(d.ref));
-					await batch.commit();
-					deletedFS += snap.size;
-					lastDocSnap = snap.docs[snap.docs.length - 1];
-				}
-			} catch (err) {
-				console.warn('No se pudo borrar historial de la base de datos (mensajes):', err);
-			}
+			const callable = httpsCallable(functionsClient, 'adminClearChats');
+			const response = await callable({ token: ADMIN_CLEAR_TOKEN });
+			const payload = response?.data || {};
 			if (selectedUserKey) {
 				clearChat();
 				loadChat(selectedUserKey);
-			} else {
-				renderUserList && renderUserList();
+			} else if (typeof renderUserList === 'function') {
+				renderUserList();
 			}
-
-			return { deletedRTDB, deletedFS };
+			return {
+				deletedRTDB: Number(payload.deletedRTDB || 0),
+				deletedFS: Number(payload.deletedFS || 0)
+			};
 		} catch (err) {
 			console.error('Error en Cajero (borrado forzado):', err);
 			throw err;

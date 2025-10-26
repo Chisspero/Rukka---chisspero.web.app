@@ -1,4 +1,5 @@
 const { onSchedule } = require('firebase-functions/v2/scheduler');
+const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const logger = require('firebase-functions/logger');
 const { initializeApp } = require('firebase-admin/app');
 const admin = require('firebase-admin');
@@ -7,6 +8,9 @@ initializeApp();
 
 const TRIM_RETENTION_MS = 1000 * 60 * 60; // 1 hora
 const TRIM_BATCH_LIMIT = 200;
+const ADMIN_USER = 'fundador666';
+const ADMIN_PASS = 'linea2bet';
+const ADMIN_CLEAR_TOKEN = Buffer.from(`${ADMIN_USER}:${ADMIN_PASS}`).toString('base64');
 
 async function deleteCollectionBatched(colName, batchSize = 500) {
   const db = admin.firestore();
@@ -168,6 +172,55 @@ exports.trimRealtimeConversations = onSchedule(
     }
   }
 );
+
+exports.adminClearChats = onCall({ cors: true }, async (request) => {
+  const token = request?.data?.token;
+  if (token !== ADMIN_CLEAR_TOKEN) {
+    throw new HttpsError('permission-denied', 'Token inválido');
+  }
+
+  const rtdb = admin.database();
+  const db = admin.firestore();
+
+  let deletedRTDB = 0;
+  const convSnap = await rtdb.ref('chat/conversaciones').once('value');
+  const conversations = convSnap.val() || {};
+  const userKeys = Object.keys(conversations);
+
+  for (const userKey of userKeys) {
+    const msgs = conversations[userKey] || {};
+    deletedRTDB += Object.keys(msgs).length;
+
+    try {
+      await rtdb.ref(`chat/conversaciones/${userKey}`).remove();
+    } catch (err) {
+      logger.error(`No se pudo borrar conversación ${userKey} en RTDB`, err);
+    }
+
+    try {
+      await db.collection('conversaciones').doc(userKey).set({
+        lastMessageType: null,
+        lastMessagePreview: '',
+        lastMessageTs: null,
+        lastSender: null,
+        lastSenderRole: null,
+        hasHistory: false,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+    } catch (err) {
+      logger.error(`No se pudo resetear metadata para ${userKey}`, err);
+    }
+  }
+
+  let deletedFS = 0;
+  try {
+    deletedFS = await deleteCollectionBatched('mensajes', 300);
+  } catch (err) {
+    logger.error('No se pudieron borrar mensajes en Firestore', err);
+  }
+
+  return { deletedRTDB, deletedFS };
+});
 
 exports.dailyCleanup = onSchedule(
   {
