@@ -30,6 +30,41 @@ async function deleteCollectionBatched(colName, batchSize = 500) {
   return total;
 }
 
+async function resetConversationsMetadata(db) {
+  const snap = await db.collection('conversaciones').get();
+  if (snap.empty) return 0;
+
+  let total = 0;
+  let batch = db.batch();
+  let count = 0;
+  const template = {
+    lastMessageType: null,
+    lastMessagePreview: '',
+    lastMessageTs: null,
+    lastSender: null,
+    lastSenderRole: null,
+    hasHistory: false,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+  };
+
+  for (const docSnap of snap.docs) {
+    batch.set(docSnap.ref, template, { merge: true });
+    count += 1;
+    total += 1;
+    if (count === 400) {
+      await batch.commit();
+      batch = db.batch();
+      count = 0;
+    }
+  }
+
+  if (count > 0) {
+    await batch.commit();
+  }
+
+  return total;
+}
+
 function buildMetadataPayload(userKey, msg) {
   if (!msg) {
     return {
@@ -234,15 +269,14 @@ exports.dailyCleanup = onSchedule(
     const db = admin.firestore();
     try {
       await rtdb.ref('chat/conversaciones').remove();
-      await rtdb.ref('chat/aliases').remove();
-      logger.info('RTDB: conversaciones y aliases eliminados');
+      logger.info('RTDB: mensajes eliminados de conversaciones');
     } catch (err) {
       logger.error('Error limpiando RTDB', err);
     }
     try {
       const delMensajes = await deleteCollectionBatched('mensajes', 500);
-      const delConversaciones = await deleteCollectionBatched('conversaciones', 500);
-      logger.info(`Base de datos: borrados ${delMensajes} mensajes, ${delConversaciones} conversaciones`);
+      const resetCount = await resetConversationsMetadata(db);
+      logger.info(`Base de datos: borrados ${delMensajes} mensajes, metadata reseteada en ${resetCount} conversaciones`);
     } catch (err) {
       logger.error('Error limpiando Base de datos', err);
     }
