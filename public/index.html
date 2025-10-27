@@ -646,8 +646,8 @@
 	let serverTimeOffsetMs = 0;
 	let adminReadState = {};
 	let unsubscribeAdminReads = null;
-	let adminNotes = {};
-	let unsubscribeAdminNotes = null;
+	let adminNotes = {}; // Cache de notas ya cargadas
+	let currentNoteSubscription = null; // Suscripción de la nota activa
 	let messageIndex = new Map();
 
 	onValue(ref(db, '.info/serverTimeOffset'), (snap) => {
@@ -1138,6 +1138,31 @@
 					}
 				}
 
+				function loadAdminNote(userKey) {
+					if (!userKey || currentUser.role !== 'admin') return;
+					
+					// Cancelar suscripción anterior
+					if (currentNoteSubscription) {
+						try { currentNoteSubscription(); } catch {}
+						currentNoteSubscription = null;
+					}
+					
+					// Si ya está en caché, solo actualizar y suscribirse
+					const noteDoc = doc(fs, 'adminNotes', userKey);
+					currentNoteSubscription = onSnapshot(noteDoc, (snap) => {
+						if (snap.exists()) {
+							const data = snap.data();
+							adminNotes[userKey] = data.note || '';
+						} else {
+							// No hay nota para este usuario
+							adminNotes[userKey] = '';
+						}
+						updateActiveChatHeader();
+					}, (err) => {
+						console.warn('Error cargando nota del admin', err);
+					});
+				}
+
 				function appendMessage(id, msg, userKey) {
 				const wrap = document.createElement('div');
 				wrap.className = 'msg ' + (msg.role === 'admin' ? 'from-admin' : 'from-user');
@@ -1372,6 +1397,10 @@
 			messagesScrollHandler = scrollHandler;
 			selectedUserKey = userKey;
 			clearUnread(userKey);
+			// Cargar nota del admin para este usuario (solo admin)
+			if (currentUser.role === 'admin') {
+				loadAdminNote(userKey);
+			}
 			// Marcar como leído persistentemente al abrir el chat (solo admin)
 			if (currentUser.role === 'admin') {
 				markChatRead(userKey);
@@ -2241,9 +2270,9 @@
 						try { unsubscribeAdminReads(); } catch {}
 						unsubscribeAdminReads = null;
 					}
-					if (unsubscribeAdminNotes) {
-						try { unsubscribeAdminNotes(); } catch {}
-						unsubscribeAdminNotes = null;
+					if (currentNoteSubscription) {
+						try { currentNoteSubscription(); } catch {}
+						currentNoteSubscription = null;
 					}
 					conversations = {};
 					userAliases = {};
@@ -2396,24 +2425,7 @@
 							console.warn('No se pudo suscribir a admin reads', err);
 						}
 					}
-					// Suscribirse a notas del admin
-					if (!unsubscribeAdminNotes) {
-						try {
-							const notesCol = collection(fs, 'adminNotes');
-							unsubscribeAdminNotes = onSnapshot(notesCol, (snap) => {
-								adminNotes = {};
-								snap.forEach((docSnap) => {
-									const data = docSnap.data();
-									if (data && data.note !== undefined) {
-										adminNotes[docSnap.id] = data.note;
-									}
-								});
-								updateActiveChatHeader();
-							}, (err) => console.warn('Error suscribiendo admin notes', err));
-						} catch (err) {
-							console.warn('No se pudo suscribir a admin notes', err);
-						}
-					}
+					// Ya no suscribimos a TODAS las notas - se cargan bajo demanda
 					renderUserList();
 					const searchInput = document.getElementById('userSearch');
 					if (searchInput && !searchInput.dataset.bound) {
