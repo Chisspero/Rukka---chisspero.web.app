@@ -2044,6 +2044,28 @@
 				});
 			}
 
+			// Fallback por delegación (por si algún bind no se aplicó)
+			document.addEventListener('click', async (e) => {
+				const btn = e.target && (e.target.closest ? e.target.closest('#confirmPdfBtn, #cancelPdfBtn') : null);
+				if (!btn) return;
+				if (btn.id === 'cancelPdfBtn') {
+					clearPdfPreview();
+					return;
+				}
+				if (btn.id === 'confirmPdfBtn') {
+					if (!pendingPdfFile) { alert('Elegí un archivo PDF'); return; }
+					try {
+						btn.disabled = true;
+						await uploadPdfAndSend(pendingPdfFile);
+					} catch (err) {
+						console.error('No se pudo enviar PDF (delegación):', err);
+						alert('No se pudo enviar el PDF');
+					} finally {
+						try { btn.disabled = false; } catch {}
+					}
+				}
+			}, true);
+
 			sendBtn.addEventListener('click', sendCurrentMessage);
 			messageInput.addEventListener('keydown', (e) => {
 				if (e.key === 'Enter') {
