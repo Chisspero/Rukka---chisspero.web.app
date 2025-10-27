@@ -1558,6 +1558,17 @@
 				return type === 'application/pdf' || /\.pdf$/i.test(name);
 			}
 
+			function readFileAsDataURL(file) {
+				return new Promise((resolve, reject) => {
+					try {
+						const reader = new FileReader();
+						reader.onloadend = () => resolve(String(reader.result || ''));
+						reader.onerror = (e) => reject(e);
+						reader.readAsDataURL(file);
+					} catch (err) { reject(err); }
+				});
+			}
+
 			async function compressImageToDataURL(file, opts = {}) {
 				const maxSize = opts.maxSize || 960;
 				const quality = opts.quality || 0.75;
@@ -1876,22 +1887,44 @@
 					}
 					if (!userChatKey) return;
 					const convRef = ref(db, 'chat/conversaciones/' + userChatKey);
-					// Subir a Storage
-					const safeName = (file.name || 'archivo.pdf').replace(/[^a-zA-Z0-9._-]+/g, '_');
-					const path = `chat/pdfs/${encodeURIComponent(userChatKey)}/${Date.now()}-${safeName}`;
-					const sref = storageRef(storage, path);
-					await uploadBytes(sref, file, { contentType: 'application/pdf' });
-					const url = await getDownloadURL(sref);
-					const payload = {
-						type: 'pdf',
-						pdfUrl: url,
-						name: file.name || 'archivo.pdf',
-						size: file.size || null,
-						sender: currentUser.role === 'admin' ? 'Administrador' : currentUser.name || 'Anónimo',
-						role: currentUser.role,
-						ts: nowMs(),
-						timestamp: serverTimestamp()
-					};
+					let payload;
+					try {
+						// Intentar Storage primero
+						const safeName = (file.name || 'archivo.pdf').replace(/[^a-zA-Z0-9._-]+/g, '_');
+						const path = `chat/pdfs/${encodeURIComponent(userChatKey)}/${Date.now()}-${safeName}`;
+						const sref = storageRef(storage, path);
+						await uploadBytes(sref, file, { contentType: 'application/pdf' });
+						const url = await getDownloadURL(sref);
+						payload = {
+							type: 'pdf',
+							pdfUrl: url,
+							name: file.name || 'archivo.pdf',
+							size: file.size || null,
+							sender: currentUser.role === 'admin' ? 'Administrador' : currentUser.name || 'Anónimo',
+							role: currentUser.role,
+							ts: nowMs(),
+							timestamp: serverTimestamp()
+						};
+					} catch (storageErr) {
+						console.warn('Fallo Storage, usando data URL para PDF:', storageErr);
+						// Fallback: enviar embebido como Data URL (límite más bajo)
+						const EMBED_MAX_BYTES = 1024 * 1024 * 1.5; // ~1.5 MB
+						if (file.size > EMBED_MAX_BYTES) {
+							alert('No se puede enviar el PDF: muy pesado para incrustar (máximo ~1.5 MB).');
+							return;
+						}
+						const dataUrl = await readFileAsDataURL(file);
+						payload = {
+							type: 'pdf',
+							pdfDataUrl: dataUrl,
+							name: file.name || 'archivo.pdf',
+							size: file.size || null,
+							sender: currentUser.role === 'admin' ? 'Administrador' : currentUser.name || 'Anónimo',
+							role: currentUser.role,
+							ts: nowMs(),
+							timestamp: serverTimestamp()
+						};
+					}
 					const newRef = push(convRef);
 					await set(newRef, payload);
 					try {
