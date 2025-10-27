@@ -626,6 +626,9 @@
 		let recordingStartedAt = 0;
 		let pendingAudioDataUrl = null;
 		let sendingAudio = false;
+		let audioPreviewOwnerKey = null; // dueño de la vista previa de audio
+		let pendingAudioSizeKB = 0; // tamaño aprox del audio
+		let imagePreviewOwnerKey = null; // dueño de la vista previa de imagen
 
 		const USER1 = 'fundador666';
 		const USER2 = 'linea2bet';
@@ -803,6 +806,9 @@
 			selectedUserKey = null;
 			clearChat();
 			clearUserList();
+			// Al salir, limpiar vistas previas en UI y estado
+			try { clearImagePreview && clearImagePreview(); } catch {}
+			try { clearAudioPreview && clearAudioPreview(); } catch {}
 			stopInactivityWatch && stopInactivityWatch();
 		}
 
@@ -1341,6 +1347,9 @@
 			clearChat();
 			if (!userKey) {
 				updateActiveChatHeader();
+				// Sin chat seleccionado: ocultar vistas previas pendientes en UI
+				try { if (imagePreview) imagePreview.style.display = 'none'; } catch {}
+				try { if (audioPreview) audioPreview.style.display = 'none'; } catch {}
 				return;
 			}
 
@@ -1398,6 +1407,23 @@
 				markChatRead(userKey);
 			}
 			updateActiveChatHeader();
+			// Gestionar visibilidad de vistas previas según el chat dueño
+			try {
+				if (pendingAudioDataUrl) {
+					if (audioPreviewOwnerKey === userKey) {
+						showAudioPreview(pendingAudioDataUrl, pendingAudioSizeKB || 0);
+					} else if (audioPreview) {
+						audioPreview.style.display = 'none';
+					}
+				}
+				if (pendingImageFile) {
+					if (imagePreviewOwnerKey === userKey) {
+						showImagePreview(pendingImageFile);
+					} else if (imagePreview) {
+						imagePreview.style.display = 'none';
+					}
+				}
+			} catch {}
 			}
 
 			async function upsertConversationMetadata(userKey, info = {}) {
@@ -1548,6 +1574,18 @@
 
 			function showImagePreview(file) {
 				if (!file) return;
+				// Determinar a qué chat pertenece esta vista previa
+				let ownerKey = null;
+				if (currentUser.role === 'admin') {
+					if (!selectedUserKey) {
+						alert('Primero seleccioná un chat para adjuntar una imagen');
+						return;
+					}
+					ownerKey = selectedUserKey;
+				} else {
+					ownerKey = currentUser.name;
+				}
+				imagePreviewOwnerKey = ownerKey;
 				if (imagePreviewThumb.src && imagePreviewThumb.src.startsWith('blob:')) {
 					try { URL.revokeObjectURL(imagePreviewThumb.src); } catch {}
 				}
@@ -1568,6 +1606,7 @@
 				imagePreviewThumb.src = '';
 				imagePreview.style.display = 'none';
 				pendingImageFile = null;
+				imagePreviewOwnerKey = null;
 				uploadingImage = false;
 				confirmImageBtn.disabled = false;
 				cancelImageBtn.disabled = false;
@@ -1575,6 +1614,15 @@
 
 			function showAudioPreview(dataUrl, sizeKB) {
 				if (!audioPreview || !audioPreviewPlayer) return;
+				// Registrar dueño de la vista previa (chat actual)
+				let ownerKey = null;
+				if (currentUser.role === 'admin') {
+					ownerKey = selectedUserKey || null;
+				} else {
+					ownerKey = currentUser.name || null;
+				}
+				audioPreviewOwnerKey = ownerKey;
+				pendingAudioSizeKB = Number(sizeKB || 0);
 				audioPreviewPlayer.pause();
 				audioPreviewPlayer.src = dataUrl;
 				try { audioPreviewPlayer.currentTime = 0; } catch {}
@@ -1590,10 +1638,12 @@
 				try { audioPreviewPlayer.pause(); } catch {}
 				audioPreviewPlayer.removeAttribute('src');
 				pendingAudioDataUrl = null;
+				pendingAudioSizeKB = 0;
 				audioPreview.style.display = 'none';
 				confirmAudioBtn.disabled = false;
 				cancelAudioBtn.disabled = false;
 				sendingAudio = false;
+				audioPreviewOwnerKey = null;
 			}
 
 			function formatDuration(ms) {
@@ -1841,6 +1891,12 @@
 			// Confirm/Cancel image
 			confirmImageBtn.addEventListener('click', async () => {
 				if (pendingImageFile && !uploadingImage) {
+					// Validar que seguimos en el chat dueño de la vista previa
+					let currentKey = currentUser.role === 'admin' ? selectedUserKey : currentUser.name;
+					if (imagePreviewOwnerKey && currentKey !== imagePreviewOwnerKey) {
+						alert('Cambiaste de chat. Volvé al chat original para enviar esta imagen, o cancelá y adjuntala de nuevo.');
+						return;
+					}
 					await uploadImageAndSend(pendingImageFile);
 				}
 			});
@@ -1852,6 +1908,12 @@
 			// Confirm/Cancel audio
 			confirmAudioBtn.addEventListener('click', async () => {
 				if (!pendingAudioDataUrl || sendingAudio) return;
+				// Validar que seguimos en el chat dueño de la vista previa
+				let currentKey = currentUser.role === 'admin' ? selectedUserKey : currentUser.name;
+				if (audioPreviewOwnerKey && currentKey !== audioPreviewOwnerKey) {
+					alert('Cambiaste de chat. Volvé al chat original para enviar este audio, o cancelá y grabá de nuevo.');
+					return;
+				}
 				sendingAudio = true;
 				confirmAudioBtn.disabled = true;
 				cancelAudioBtn.disabled = true;
