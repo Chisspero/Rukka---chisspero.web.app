@@ -126,7 +126,7 @@
 			background-size: clamp(160px, 40%, 420px);
 			opacity: 0.04;
 		}
-		/* Mensajes estilo WhatsApp: usuario izquierda, admin derecha */
+		/* Mensajes estilo WhatsApp: mensajes propios a la derecha, del otro a la izquierda */
 		.msg { margin: 10px 0; display: flex; flex-direction: column; gap: 6px; max-width: 75%; }
 		.msg.from-user { align-self: flex-start; }
 		.msg.from-admin { align-self: flex-end; }
@@ -138,11 +138,13 @@
 		.meta .role.user { color: var(--primary); border-color: rgba(77,163,255,0.35); }
 		
 		.bubble { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: #11131a; box-shadow: 0 8px 18px rgba(0,0,0,0.18) inset; }
+		/* Mensajes del otro: izquierda con colita izquierda */
 		.msg.from-user .bubble { 
 			background: linear-gradient(180deg, #111625, #0f1220); 
 			border-color: #20243a; 
 			border-radius: 10px 10px 10px 2px;
 		}
+		/* Mensajes propios: derecha con colita derecha */
 		.msg.from-admin .bubble { 
 			background: linear-gradient(180deg, #0f1b17, #0d1513); 
 			border-color: #1f2f2a;
@@ -1156,7 +1158,10 @@
 
 				function appendMessage(id, msg, userKey) {
 				const wrap = document.createElement('div');
-				wrap.className = 'msg ' + (msg.role === 'admin' ? 'from-admin' : 'from-user');
+				// Vista dinámica: el mensaje es "mío" si soy admin y el rol es admin, o si soy usuario y el rol es user
+				const isMyMessage = (currentUser.role === 'admin' && msg.role === 'admin') || 
+				                    (currentUser.role === 'user' && msg.role !== 'admin');
+				wrap.className = 'msg ' + (isMyMessage ? 'from-admin' : 'from-user');
 					if (id) wrap.dataset.id = String(id);
 				const meta = document.createElement('div');
 				meta.className = 'meta';
