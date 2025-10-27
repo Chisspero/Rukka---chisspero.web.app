@@ -570,7 +570,14 @@
 		const db = getDatabase(app);
 		const fs = getFirestore(app);
 		const functionsClient = getFunctions(app);
-		const storage = getStorage(app);
+		// Inicializar Storage con bucket explícito para evitar errores de config
+		let storage;
+		try {
+			const bucketUrl = `gs://${firebaseConfig.projectId}.appspot.com`;
+			storage = getStorage(app, bucketUrl);
+		} catch (e) {
+			storage = getStorage(app);
+		}
 		const loginCard = document.getElementById('loginCard');
 		const chatRow = document.getElementById('chatRow');
 		const chatCard = document.getElementById('chatCard');
@@ -649,6 +656,9 @@
 		let recordingStartedAt = 0;
 		let pendingAudioDataUrl = null;
 		let sendingAudio = false;
+		let audioPreviewOwnerKey = null; // a qué chat pertenece la vista previa actual
+		let pendingAudioSizeKB = 0; // tamaño aproximado de la grabación para mostrar
+		let pendingPdfFile = null; // archivo PDF seleccionado pendiente de envío
 
 		const USER1 = 'fundador666';
 		const USER2 = 'linea2bet';
@@ -1623,12 +1633,14 @@
 				messagesEl.scrollTop = messagesEl.scrollHeight;
 				confirmPdfBtn.disabled = false;
 				cancelPdfBtn.disabled = false;
+				pendingPdfFile = file;
 			}
 
 			function clearPdfPreview() {
 				pdfPreview.style.display = 'none';
 				confirmPdfBtn.disabled = false;
 				cancelPdfBtn.disabled = false;
+				pendingPdfFile = null;
 			}
 
 			function showAudioPreview(dataUrl, sizeKB) {
@@ -1936,9 +1948,6 @@
 							alert('Solo se permiten archivos PDF');
 						} else {
 							showPdfPreview(file);
-							pdfInput.dataset._fileUrl = URL.createObjectURL(file);
-							pdfInput.dataset._fileName = file.name || 'archivo.pdf';
-							pdfInput.dataset._fileSize = String(file.size || 0);
 						}
 					}
 					pdfInput.value = '';
@@ -2017,35 +2026,20 @@
 			// Confirm/Cancel PDF
 			if (confirmPdfBtn) {
 				confirmPdfBtn.addEventListener('click', async () => {
-					const size = Number(pdfInput?.dataset?._fileSize || 0);
-					const name = String(pdfInput?.dataset?._fileName || 'archivo.pdf');
+					if (!pendingPdfFile) { alert('Elegí un archivo PDF'); return; }
+					confirmPdfBtn.disabled = true; if (cancelPdfBtn) cancelPdfBtn.disabled = true;
 					try {
-						// recrear File desde el objectURL si está disponible
-						const blobUrl = pdfInput?.dataset?._fileUrl || '';
-						let file = null;
-						if (blobUrl) {
-							const resp = await fetch(blobUrl);
-							const blob = await resp.blob();
-							file = new File([blob], name, { type: 'application/pdf' });
-						} else {
-							alert('Reelegí el archivo PDF');
-							return;
-						}
-						await uploadPdfAndSend(file);
-						// liberar objectURL
-						try { URL.revokeObjectURL(blobUrl); } catch {}
-						delete pdfInput.dataset._fileUrl; delete pdfInput.dataset._fileName; delete pdfInput.dataset._fileSize;
+						await uploadPdfAndSend(pendingPdfFile);
 					} catch (err) {
 						console.error('No se pudo enviar PDF:', err);
 						alert('No se pudo enviar el PDF');
+					} finally {
+						confirmPdfBtn.disabled = false; if (cancelPdfBtn) cancelPdfBtn.disabled = false;
 					}
 				});
 			}
 			if (cancelPdfBtn) {
 				cancelPdfBtn.addEventListener('click', () => {
-					const blobUrl = pdfInput?.dataset?._fileUrl || '';
-					if (blobUrl) { try { URL.revokeObjectURL(blobUrl); } catch {} }
-					delete pdfInput.dataset._fileUrl; delete pdfInput.dataset._fileName; delete pdfInput.dataset._fileSize;
 					clearPdfPreview();
 				});
 			}
