@@ -436,25 +436,12 @@
 								</div>
 							</div>
 						</div>
-						<!-- Vista previa de PDF -->
-						<div class="image-preview" id="pdfPreview" style="display:none">
-							<div class="thumb" style="display:flex;align-items:center;justify-content:center;width:140px;height:100px;background:#0e0e0f;border:1px solid var(--border);border-radius:8px;font-size:42px;">📄</div>
-							<div class="info">
-								<div class="name" id="pdfPreviewName">archivo.pdf</div>
-								<div class="actions">
-									<button class="btn" id="cancelPdfBtn" type="button">Cancelar</button>
-									<button class="btn primary" id="confirmPdfBtn" type="button">Enviar PDF</button>
-								</div>
-							</div>
-						</div>
 						<div class="composer">
 							<input class="input" id="messageInput" type="text" placeholder="Escribe un mensaje y presiona Enter..." />
 							<button class="btn icon" id="audioBtn" type="button" title="Mantener para grabar">🎤</button>
 							<button class="btn icon" id="imageBtn" type="button" title="Enviar imagen">📷</button>
-							<button class="btn icon" id="pdfBtn" type="button" title="Adjuntar PDF">📄</button>
 							<button class="btn primary" id="sendBtn" type="button">Enviar</button>
 							<input type="file" id="imageInput" accept="image/*" style="display:none" />
-							<input type="file" id="pdfInput" accept="application/pdf" style="display:none" />
 						</div>
 					</div>
 					<!-- Overlay informativo de horario cerrado -->
@@ -534,8 +521,6 @@
 	import { getDatabase, ref, push, serverTimestamp, onChildAdded, query, limitToLast, limitToFirst, onValue, off, set, remove, get, orderByChild, endAt } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js';
 	import { getFirestore, collection, doc, addDoc, setDoc, deleteDoc, serverTimestamp as fsServerTimestamp, onSnapshot, where, query as fsQuery, getDocs, writeBatch, orderBy } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
 	import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-functions.js';
-    import { getAuth, signInAnonymously, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js';
-    import { getStorage, ref as stRef, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-storage.js';
 
 		const firebaseConfig = {
 			apiKey: "AIzaSyB3Fjr_lu4mRECh_QCbF1thuVfTYkf42eQ",
@@ -549,12 +534,6 @@
 		};
 
 		const app = initializeApp(firebaseConfig);
-		const auth = getAuth(app);
-		// Iniciar sesión anónima (opcional). Evitamos await top-level por compatibilidad.
-		try { signInAnonymously(auth).catch((e) => console.warn('Anon auth failed', e)); } catch (e) { console.warn('Anon auth failed', e); }
-		onAuthStateChanged(auth, (u) => { if (!u) return; /*console.log('Anon auth OK')*/ });
-		// Usar bucket por defecto del proyecto
-		const storage = getStorage(app, 'gs://chisspero.appspot.com');
 		const db = getDatabase(app);
 		const fs = getFirestore(app);
 		const functionsClient = getFunctions(app);
@@ -597,10 +576,8 @@
 		const messageInput = document.getElementById('messageInput');
 		const sendBtn = document.getElementById('sendBtn');
 		const imageBtn = document.getElementById('imageBtn');
-		const pdfBtn = document.getElementById('pdfBtn');
 		const audioBtn = document.getElementById('audioBtn');
 		const imageInput = document.getElementById('imageInput');
-		const pdfInput = document.getElementById('pdfInput');
 		const logoutBtn = document.getElementById('logoutBtn');
 		const recordingBar = document.getElementById('recordingBar');
 		const recordingTimeEl = document.getElementById('recordingTime');
@@ -609,11 +586,6 @@
 		const imagePreviewName = document.getElementById('imagePreviewName');
 		const confirmImageBtn = document.getElementById('confirmImageBtn');
 		const cancelImageBtn = document.getElementById('cancelImageBtn');
-		// Preview de PDF
-		const pdfPreview = document.getElementById('pdfPreview');
-		const pdfPreviewName = document.getElementById('pdfPreviewName');
-		const confirmPdfBtn = document.getElementById('confirmPdfBtn');
-		const cancelPdfBtn = document.getElementById('cancelPdfBtn');
 		// Preview de audio
 		const audioPreview = document.getElementById('audioPreview');
 		const audioPreviewPlayer = document.getElementById('audioPreviewPlayer');
@@ -629,9 +601,7 @@
 		const closedDismissBtn = document.getElementById('closedDismissBtn');
 
 		let pendingImageFile = null;
-		let pendingPdfFile = null;
 		let uploadingImage = false;
-		let uploadingPdf = false;
 		let mediaRecorder = null;
 		let audioChunks = [];
 		let recordingTimer = null;
@@ -676,8 +646,8 @@
 	let serverTimeOffsetMs = 0;
 	let adminReadState = {};
 	let unsubscribeAdminReads = null;
-	let adminNotes = {}; // Cache de notas ya cargadas
-	let currentNoteSubscription = null; // Suscripción de la nota activa
+	let adminNotes = {};
+	let unsubscribeAdminNotes = null;
 	let messageIndex = new Map();
 
 	onValue(ref(db, '.info/serverTimeOffset'), (snap) => {
@@ -1091,8 +1061,6 @@
 						notifBody = '📷 Imagen';
 					} else if (message.audioDataUrl) {
 						notifBody = '🎤 Audio';
-					} else if (message.fileUrl || message.type === 'file') {
-						notifBody = '📄 PDF';
 					} else {
 						notifBody = 'Mensaje nuevo';
 					}
@@ -1170,31 +1138,6 @@
 					}
 				}
 
-				function loadAdminNote(userKey) {
-					if (!userKey || currentUser.role !== 'admin') return;
-					
-					// Cancelar suscripción anterior
-					if (currentNoteSubscription) {
-						try { currentNoteSubscription(); } catch {}
-						currentNoteSubscription = null;
-					}
-					
-					// Si ya está en caché, solo actualizar y suscribirse
-					const noteDoc = doc(fs, 'adminNotes', userKey);
-					currentNoteSubscription = onSnapshot(noteDoc, (snap) => {
-						if (snap.exists()) {
-							const data = snap.data();
-							adminNotes[userKey] = data.note || '';
-						} else {
-							// No hay nota para este usuario
-							adminNotes[userKey] = '';
-						}
-						updateActiveChatHeader();
-					}, (err) => {
-						console.warn('Error cargando nota del admin', err);
-					});
-				}
-
 				function appendMessage(id, msg, userKey) {
 				const wrap = document.createElement('div');
 				wrap.className = 'msg ' + (msg.role === 'admin' ? 'from-admin' : 'from-user');
@@ -1261,20 +1204,6 @@
 					audio.src = msg.audioDataUrl;
 					aWrap.appendChild(audio);
 					wrap.appendChild(aWrap);
-				}
-				if (msg.type === 'file' && msg.fileUrl) {
-					const fWrap = document.createElement('div');
-					fWrap.className = 'text bubble';
-					const a = document.createElement('a');
-					a.href = msg.fileUrl;
-					a.textContent = `📄 ${msg.fileName || 'Archivo PDF'}`;
-					a.style.color = 'var(--primary)';
-					a.addEventListener('click', (e) => {
-						e.preventDefault();
-						window.location.replace(a.href);
-					});
-					fWrap.appendChild(a);
-					wrap.appendChild(fWrap);
 				}
 				if (msg.text) {
 					const text = document.createElement('div');
@@ -1443,10 +1372,6 @@
 			messagesScrollHandler = scrollHandler;
 			selectedUserKey = userKey;
 			clearUnread(userKey);
-			// Cargar nota del admin para este usuario (solo admin)
-			if (currentUser.role === 'admin') {
-				loadAdminNote(userKey);
-			}
 			// Marcar como leído persistentemente al abrir el chat (solo admin)
 			if (currentUser.role === 'admin') {
 				markChatRead(userKey);
@@ -1456,7 +1381,7 @@
 
 			async function upsertConversationMetadata(userKey, info = {}) {
 				if (!userKey) return;
-				const type = info.type || (info.text ? 'text' : (info.imageDataUrl || info.name) ? 'image' : info.audioDataUrl ? 'audio' : (info.fileUrl || info.fileName) ? 'file' : 'text');
+				const type = info.type || (info.text ? 'text' : (info.imageDataUrl || info.name) ? 'image' : info.audioDataUrl ? 'audio' : 'text');
 				let preview = null;
 				if (type === 'text') {
 					preview = (info.text || '').slice(0, 120);
@@ -1464,8 +1389,6 @@
 					preview = info.name ? `📷 ${info.name}` : '📷 Imagen enviada';
 				} else if (type === 'audio') {
 					preview = '🎤 Audio enviado';
-				} else if (type === 'file') {
-					preview = info.fileName ? `📄 ${info.fileName}` : '📄 Archivo enviado';
 				}
 				const ts = typeof info.ts === 'number' ? info.ts : nowMs();
 				const payload = {
@@ -1722,37 +1645,6 @@
 		} catch (err) {
 			alert('No se pudo acceder al micrófono. Revisá permisos del navegador');
 		}
-
-		function isPdf(file) {
-			if (!file) return false;
-			const type = (file.type || '').toLowerCase();
-			const name = (file.name || '').toLowerCase();
-			return type === 'application/pdf' || /\.pdf$/i.test(name);
-		}
-
-		function sanitizeFileName(name) {
-			return String(name || 'archivo')
-				.replace(/[^a-zA-Z0-9._-]+/g, '_')
-				.slice(0, 80);
-		}
-
-		function showPdfPreview(file) {
-			if (!file) return;
-			pendingPdfFile = file;
-			pdfPreviewName.textContent = file.name || 'archivo.pdf';
-			pdfPreview.style.display = 'flex';
-			messagesEl.scrollTop = messagesEl.scrollHeight;
-			confirmPdfBtn.disabled = false;
-			cancelPdfBtn.disabled = false;
-		}
-
-		function clearPdfPreview() {
-			pdfPreview.style.display = 'none';
-			pendingPdfFile = null;
-			uploadingPdf = false;
-			confirmPdfBtn.disabled = false;
-			cancelPdfBtn.disabled = false;
-		}
 		}
 
 			async function stopAudioRecording(auto = false) {
@@ -1889,21 +1781,6 @@
 				imageInput.value = '';
 			});
 
-			// PDF attach
-			pdfBtn.addEventListener('click', () => pdfInput.click());
-			pdfInput.addEventListener('change', (e) => {
-				const file = e.target.files && e.target.files[0];
-				if (file) {
-					if (!isPdf(file)) {
-						alert('Solo se permiten archivos PDF');
-					} else {
-						if (uploadingPdf) return;
-						showPdfPreview(file);
-					}
-				}
-				pdfInput.value = '';
-			});
-
 			// Paste handler (desktop)
 			document.addEventListener('paste', (e) => {
 				if (!e.clipboardData) return;
@@ -1949,91 +1826,6 @@
 			cancelImageBtn.addEventListener('click', () => {
 				if (uploadingImage) return;
 				clearImagePreview();
-			});
-
-			async function uploadPdfAndSend(file) {
-				try {
-					if (!isPdf(file)) return;
-					uploadingPdf = true;
-					confirmPdfBtn.disabled = true;
-					cancelPdfBtn.disabled = true;
-					// Límite de tamaño (10 MB)
-					const MAX_BYTES = 10 * 1024 * 1024;
-					if (file.size > MAX_BYTES) {
-						throw new Error('El PDF supera el límite de 10 MB');
-					}
-					let userChatKey = null;
-					if (currentUser.role === 'admin') {
-						if (!selectedUserKey) return;
-						userChatKey = selectedUserKey;
-					} else {
-						userChatKey = currentUser.name;
-					}
-					if (!userChatKey) return;
-					const ts = nowMs();
-					const safeName = sanitizeFileName(file.name || 'archivo.pdf');
-					const path = `chat_files/${(userChatKey || 'anon')}/${ts}_${safeName}`;
-					const refObj = stRef(storage, path);
-					await uploadBytes(refObj, file, { contentType: 'application/pdf' });
-					const url = await getDownloadURL(refObj);
-					const convRef = ref(db, 'chat/conversaciones/' + userChatKey);
-					const payload = {
-						type: 'file',
-						fileUrl: url,
-						fileName: file.name || 'archivo.pdf',
-						fileSize: file.size || null,
-						fileType: 'application/pdf',
-						storagePath: path,
-						sender: currentUser.role === 'admin' ? 'Administrador' : currentUser.name || 'Anónimo',
-						role: currentUser.role,
-						ts,
-						timestamp: serverTimestamp()
-					};
-					const newRef = push(convRef);
-					await set(newRef, payload);
-					try {
-						await addDoc(collection(fs, 'mensajes'), {
-							...payload,
-							userKey: userChatKey,
-							userKeyNormalized: (userChatKey || '').toLowerCase(),
-							rtdbKey: newRef.key || null,
-							createdAt: fsServerTimestamp()
-						});
-						appendMessageOnce(newRef.key, payload, userChatKey);
-					} catch (e) {
-						console.warn('No se pudo archivar PDF en base de datos:', e);
-					}
-					try {
-						await upsertConversationMetadata(userChatKey, {
-							type: 'file',
-							fileName: payload.fileName,
-							sender: payload.sender,
-							role: payload.role,
-							ts: payload.ts
-						});
-					} catch (err) {
-						console.warn('No se pudo actualizar metadata de conversación (archivo):', err);
-					}
-					clearPdfPreview();
-				} catch (err) {
-					console.error('Error subiendo PDF', err);
-					const msg = (err && err.message) ? err.message : 'No se pudo enviar el PDF';
-					alert(msg);
-					uploadingPdf = false;
-					confirmPdfBtn.disabled = false;
-					cancelPdfBtn.disabled = false;
-				}
-			}
-
-			// Confirm/Cancel PDF
-			confirmPdfBtn.addEventListener('click', async () => {
-				if (pendingPdfFile && !uploadingPdf) {
-					await uploadPdfAndSend(pendingPdfFile);
-				}
-			});
-			cancelPdfBtn.addEventListener('click', () => {
-				if (uploadingPdf) return;
-				clearPdfPreview();
 			});
 
 			// Confirm/Cancel audio
@@ -2449,9 +2241,9 @@
 						try { unsubscribeAdminReads(); } catch {}
 						unsubscribeAdminReads = null;
 					}
-					if (currentNoteSubscription) {
-						try { currentNoteSubscription(); } catch {}
-						currentNoteSubscription = null;
+					if (unsubscribeAdminNotes) {
+						try { unsubscribeAdminNotes(); } catch {}
+						unsubscribeAdminNotes = null;
 					}
 					conversations = {};
 					userAliases = {};
@@ -2604,7 +2396,24 @@
 							console.warn('No se pudo suscribir a admin reads', err);
 						}
 					}
-					// Ya no suscribimos a TODAS las notas - se cargan bajo demanda
+					// Suscribirse a notas del admin
+					if (!unsubscribeAdminNotes) {
+						try {
+							const notesCol = collection(fs, 'adminNotes');
+							unsubscribeAdminNotes = onSnapshot(notesCol, (snap) => {
+								adminNotes = {};
+								snap.forEach((docSnap) => {
+									const data = docSnap.data();
+									if (data && data.note !== undefined) {
+										adminNotes[docSnap.id] = data.note;
+									}
+								});
+								updateActiveChatHeader();
+							}, (err) => console.warn('Error suscribiendo admin notes', err));
+						} catch (err) {
+							console.warn('No se pudo suscribir a admin notes', err);
+						}
+					}
 					renderUserList();
 					const searchInput = document.getElementById('userSearch');
 					if (searchInput && !searchInput.dataset.bound) {

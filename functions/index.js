@@ -89,9 +89,7 @@ function buildMetadataPayload(userKey, msg) {
     ? 'audio'
     : (msg.imageDataUrl || msg.imageUrl)
       ? 'image'
-      : (msg.fileUrl || msg.type === 'file')
-        ? 'file'
-        : (msg.type || 'text');
+      : (msg.type || 'text');
 
   let preview = '';
   if (type === 'text' && msg.text) {
@@ -100,8 +98,6 @@ function buildMetadataPayload(userKey, msg) {
     preview = msg.name ? `📷 ${msg.name}` : '📷 Imagen enviada';
   } else if (type === 'audio') {
     preview = '🎤 Audio enviado';
-  } else if (type === 'file') {
-    preview = msg.fileName ? `📄 ${msg.fileName}` : '📄 Archivo enviado';
   }
 
   return {
@@ -124,7 +120,6 @@ async function updateConversationMetadata(db, userKey, msg) {
 async function trimConversation(rtdb, db, userKey, cutoffTs) {
   const convRef = rtdb.ref(`chat/conversaciones/${userKey}`);
   let removed = 0;
-  const storagePaths = [];
 
   for (;;) {
     const snap = await convRef
@@ -137,8 +132,6 @@ async function trimConversation(rtdb, db, userKey, cutoffTs) {
 
     const updates = {};
     snap.forEach(child => {
-      const val = child.val() || {};
-      if (val && val.storagePath) storagePaths.push(String(val.storagePath));
       updates[child.key] = null;
     });
 
@@ -163,17 +156,6 @@ async function trimConversation(rtdb, db, userKey, cutoffTs) {
     });
 
     await updateConversationMetadata(db, userKey, latestMsg);
-  }
-
-  // Borrar archivos en Storage asociados
-  if (storagePaths.length > 0) {
-    const bucket = admin.storage().bucket();
-    for (const p of storagePaths) {
-      if (!p) continue;
-      try { await bucket.file(p).delete({ ignoreNotFound: true }); } catch (e) {
-        logger.warn('No se pudo borrar archivo de Storage', { path: p, error: e && e.message });
-      }
-    }
   }
 
   return removed;
@@ -249,27 +231,11 @@ exports.adminClearChats = onCall({ cors: true }, async (request) => {
   for (const userKey of userKeys) {
     const msgs = conversations[userKey] || {};
     deletedRTDB += Object.keys(msgs).length;
-    // Recopilar archivos a borrar
-    const storagePaths = [];
-    try {
-      Object.values(msgs).forEach((m) => { if (m && m.storagePath) storagePaths.push(String(m.storagePath)); });
-    } catch {}
 
     try {
       await rtdb.ref(`chat/conversaciones/${userKey}`).remove();
     } catch (err) {
       logger.error(`No se pudo borrar conversación ${userKey} en RTDB`, err);
-    }
-
-    // Borrar archivos en Storage
-    if (storagePaths.length) {
-      const bucket = admin.storage().bucket();
-      for (const p of storagePaths) {
-        if (!p) continue;
-        try { await bucket.file(p).delete({ ignoreNotFound: true }); } catch (e) {
-          logger.warn('No se pudo borrar archivo de Storage (clear)', { path: p, error: e && e.message });
-        }
-      }
     }
 
     try {
@@ -308,31 +274,8 @@ exports.dailyCleanup = onSchedule(
     const rtdb = admin.database();
     const db = admin.firestore();
     try {
-      // Leer snapshot para detectar archivos a borrar
-      let storagePaths = [];
-      try {
-        const convSnap = await rtdb.ref('chat/conversaciones').once('value');
-        convSnap.forEach(userNode => {
-          const msgs = userNode.val() || {};
-          try { Object.values(msgs).forEach(m => { if (m && m.storagePath) storagePaths.push(String(m.storagePath)); }); } catch {}
-        });
-      } catch (e) {
-        logger.warn('No se pudo leer RTDB antes de limpieza para detectar archivos', e);
-      }
-
       await rtdb.ref('chat/conversaciones').remove();
       logger.info('RTDB: mensajes eliminados de conversaciones');
-
-      // Borrar archivos en Storage
-      if (storagePaths.length) {
-        const bucket = admin.storage().bucket();
-        for (const p of storagePaths) {
-          if (!p) continue;
-          try { await bucket.file(p).delete({ ignoreNotFound: true }); } catch (e) {
-            logger.warn('No se pudo borrar archivo de Storage (daily)', { path: p, error: e && e.message });
-          }
-        }
-      }
     } catch (err) {
       logger.error('Error limpiando RTDB', err);
     }
