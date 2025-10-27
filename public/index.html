@@ -63,8 +63,6 @@
 		}
 		.title { font-size: 18px; font-weight: 600; letter-spacing: 0.3px; }
 		.badge { font-size: 12px; padding: 4px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); background: #0f121a; }
-		.badge.editable { min-width: 80px; text-align: left; cursor: text; }
-		.badge.editable:empty::after { content: 'Nota'; opacity: .6; }
 		.badge-logo { 
 			width: 1.15em; 
 			height: 1.15em; 
@@ -394,7 +392,7 @@
 					<div>
 						<span class="badge" id="roleBadge">Usuario</span>
 						<span class="badge" id="nameBadge">-</span>
-						<span class="badge editable" id="adminNoteBadge" style="display:none;" contenteditable="false"></span>
+						<span class="badge" id="adminNoteBadge" style="display:none;"></span>
 
 						<button class="btn" id="logoutBtn" type="button" title="Cerrar sesión">Salir</button>
 					</div>
@@ -645,16 +643,13 @@
 	let knownUserKeys = new Set();
 	let userListHydrated = false;
 	let isLoggedInFlag = false;
-	let serverTimeOffsetMs = 0; // delta de reloj con el servidor RTDB
-	// Estado de lectura persistente por chat (solo admin)
-	let adminReadState = {}; // { userKey: lastReadTs }
+	let serverTimeOffsetMs = 0;
+	let adminReadState = {};
 	let unsubscribeAdminReads = null;
-
-	// Índice de mensajes renderizados para acciones (p.ej., borrar)
-	// Mapa: uniqueId -> { msg, userKey }
+	let adminNotes = {};
+	let unsubscribeAdminNotes = null;
 	let messageIndex = new Map();
 
-	// Sincronizar offset de reloj con RTDB para usar tiempos consistentes
 	onValue(ref(db, '.info/serverTimeOffset'), (snap) => {
 		try { serverTimeOffsetMs = Number(snap.val() || 0); } catch { serverTimeOffsetMs = 0; }
 	}, { onlyOnce: false });
@@ -665,16 +660,13 @@
 		const meta = conversationMeta[userKey];
 		return (meta && typeof meta.lastMessageTs === 'number') ? meta.lastMessageTs : 0;
 	}
-
-	// --- Horario cerrado: 04:00–10:00 (Buenos Aires) ---
 	function isClosedHoursBuenosAires(date = new Date()) {
 		try {
 			const parts = new Intl.DateTimeFormat('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', hour12: false, hour: 'numeric' }).formatToParts(date);
 			const hourStr = parts.find(p => p.type === 'hour')?.value || '0';
 			const hour = parseInt(hourStr, 10);
-			return hour >= 4 && hour < 10; // 04:00 inclusive hasta 09:59
+			return hour >= 4 && hour < 10;
 		} catch {
-			// Si falla Intl, no bloquear: considerar abierto
 			return false;
 		}
 	}
@@ -773,33 +765,21 @@
 			messageInput.value = '';
 			messageInput.focus();
 			if (isAdmin) {
-				if (adminNoteBadge) {
-					adminNoteBadge.style.display = '';
-					adminNoteBadge.contentEditable = 'true';
-					adminNoteBadge.setAttribute('spellcheck', 'false');
-				}
+				if (adminNoteBadge) adminNoteBadge.style.display = '';
 				selectedUserKey = selectedUserKey || null;
 				ensureAdminSubscriptions();
 				// Solicitar permisos de notificaciones para el admin
 				requestNotificationPermission();
 				stopInactivityWatch && stopInactivityWatch();
 			} else {
-				if (adminNoteBadge) {
-					adminNoteBadge.style.display = 'none';
-					adminNoteBadge.contentEditable = 'false';
-					adminNoteBadge.textContent = '';
-				}
+				if (adminNoteBadge) adminNoteBadge.style.display = 'none';
 				teardownAdminSubscriptions();
 				selectedUserKey = currentUser.name;
 				loadChat(selectedUserKey);
 				startInactivityWatch && startInactivityWatch();
 			}
 		} else {
-			if (adminNoteBadge) {
-				adminNoteBadge.style.display = 'none';
-				adminNoteBadge.contentEditable = 'false';
-				adminNoteBadge.textContent = '';
-			}
+			if (adminNoteBadge) adminNoteBadge.style.display = 'none';
 			teardownAdminSubscriptions();
 			usernameEl.focus();
 			selectedUserKey = null;
@@ -1097,18 +1077,27 @@
 			function getDisplayName(userKey) {
 				if (!userKey) return userKey;
 				return userAliases[userKey] || userAliases[(userKey.toLowerCase ? userKey.toLowerCase() : userKey)] || userKey;
-			} 			function updateActiveChatHeader() {
-					let baseName = '-';
-					if (selectedUserKey) {
-						baseName = getDisplayName(selectedUserKey) || selectedUserKey || '-';
-					} else if (currentUser.role !== 'admin') {
-						baseName = currentUser.name || '-';
-					}
-					nameBadge.textContent = baseName;
-					try { nameBadge.dataset.base = baseName; } catch {}
+		} 			function updateActiveChatHeader() {
+				let baseName = '-';
+				if (selectedUserKey) {
+					baseName = getDisplayName(selectedUserKey) || selectedUserKey || '-';
+				} else if (currentUser.role !== 'admin') {
+					baseName = currentUser.name || '-';
 				}
-
-				// Hacer clic en el nombre para copiarlo (sin modificar el texto)
+				nameBadge.textContent = baseName;
+				try { nameBadge.dataset.base = baseName; } catch {}
+				
+				// Actualizar nota del admin
+				if (currentUser.role === 'admin' && selectedUserKey) {
+					const note = adminNotes[selectedUserKey] || '';
+					if (adminNoteBadge) {
+						adminNoteBadge.textContent = note || '(vacío)';
+						adminNoteBadge.style.display = '';
+					}
+				} else {
+					if (adminNoteBadge) adminNoteBadge.style.display = 'none';
+				}
+			}				// Hacer clic en el nombre para copiarlo (sin modificar el texto)
 				if (nameBadge && !nameBadge.dataset.bound) {
 					nameBadge.title = 'Copiar nombre';
 					nameBadge.addEventListener('click', async () => {
@@ -1118,6 +1107,35 @@
 						// Silencioso: sin avisos visuales
 					});
 					nameBadge.dataset.bound = '1';
+				}
+				
+				// Hacer el badge de notas editable (solo admin)
+				if (adminNoteBadge && !adminNoteBadge.dataset.bound) {
+					adminNoteBadge.title = 'Clic para editar nota';
+					adminNoteBadge.style.cursor = 'pointer';
+					adminNoteBadge.addEventListener('click', () => {
+						if (currentUser.role !== 'admin' || !selectedUserKey) return;
+						const currentNote = adminNotes[selectedUserKey] || '';
+						const newNote = prompt('Nota para este usuario:', currentNote);
+						if (newNote !== null) {
+							saveAdminNote(selectedUserKey, newNote.trim());
+						}
+					});
+					adminNoteBadge.dataset.bound = '1';
+				}
+
+				async function saveAdminNote(userKey, noteText) {
+					if (!userKey || currentUser.role !== 'admin') return;
+					try {
+						adminNotes[userKey] = noteText;
+						await setDoc(doc(fs, 'adminNotes', userKey), {
+							note: noteText,
+							updatedAt: fsServerTimestamp()
+						});
+						updateActiveChatHeader();
+					} catch (err) {
+						console.warn('No se pudo guardar la nota del admin', err);
+					}
 				}
 
 				function appendMessage(id, msg, userKey) {
@@ -2223,9 +2241,14 @@
 						try { unsubscribeAdminReads(); } catch {}
 						unsubscribeAdminReads = null;
 					}
+					if (unsubscribeAdminNotes) {
+						try { unsubscribeAdminNotes(); } catch {}
+						unsubscribeAdminNotes = null;
+					}
 					conversations = {};
 					userAliases = {};
 					conversationMeta = {};
+					adminNotes = {};
 					knownUserKeys = new Set();
 					userListHydrated = false;
 					closeContextMenu();
@@ -2371,6 +2394,24 @@
 							}, (err) => console.warn('Error suscribiendo admin reads', err));
 						} catch (err) {
 							console.warn('No se pudo suscribir a admin reads', err);
+						}
+					}
+					// Suscribirse a notas del admin
+					if (!unsubscribeAdminNotes) {
+						try {
+							const notesCol = collection(fs, 'adminNotes');
+							unsubscribeAdminNotes = onSnapshot(notesCol, (snap) => {
+								adminNotes = {};
+								snap.forEach((docSnap) => {
+									const data = docSnap.data();
+									if (data && data.note !== undefined) {
+										adminNotes[docSnap.id] = data.note;
+									}
+								});
+								updateActiveChatHeader();
+							}, (err) => console.warn('Error suscribiendo admin notes', err));
+						} catch (err) {
+							console.warn('No se pudo suscribir a admin notes', err);
 						}
 					}
 					renderUserList();
