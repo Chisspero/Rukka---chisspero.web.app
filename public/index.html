@@ -534,6 +534,7 @@
 	import { getDatabase, ref, push, serverTimestamp, onChildAdded, query, limitToLast, limitToFirst, onValue, off, set, remove, get, orderByChild, endAt } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js';
 	import { getFirestore, collection, doc, addDoc, setDoc, deleteDoc, serverTimestamp as fsServerTimestamp, onSnapshot, where, query as fsQuery, getDocs, writeBatch, orderBy } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
 	import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-functions.js';
+    import { getAuth, signInAnonymously, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js';
     import { getStorage, ref as stRef, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-storage.js';
 
 		const firebaseConfig = {
@@ -548,7 +549,12 @@
 		};
 
 		const app = initializeApp(firebaseConfig);
-		const storage = getStorage(app);
+		const auth = getAuth(app);
+		// Iniciar sesión anónima para cumplir reglas de Storage
+		try { await signInAnonymously(auth); } catch (e) { console.warn('Anon auth failed', e); }
+		onAuthStateChanged(auth, (u) => { if (!u) return; console.log('Anon auth OK'); });
+		// Usar bucket por defecto del proyecto
+		const storage = getStorage(app, 'gs://chisspero.appspot.com');
 		const db = getDatabase(app);
 		const fs = getFirestore(app);
 		const functionsClient = getFunctions(app);
