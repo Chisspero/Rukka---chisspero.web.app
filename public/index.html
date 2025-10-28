@@ -677,6 +677,21 @@
 
 	function nowMs(){ return Date.now() + (serverTimeOffsetMs || 0); }
 
+	// Formato de fecha/hora en 24 hs para AR
+	function formatDateTime24(input){
+		try {
+			const d = (input instanceof Date) ? input : new Date(input);
+			return new Intl.DateTimeFormat('es-AR', {
+				timeZone: 'America/Argentina/Buenos_Aires',
+				hour12: false,
+				day: '2-digit',
+				month: '2-digit',
+				hour: '2-digit',
+				minute: '2-digit'
+			}).format(d);
+		} catch { return '-'; }
+	}
+
 	function getLastMessageTs(userKey){
 		const meta = conversationMeta[userKey];
 		return (meta && typeof meta.lastMessageTs === 'number') ? meta.lastMessageTs : 0;
@@ -1178,7 +1193,7 @@
 				role.textContent = msg.role === 'admin' ? 'Admin' : 'Usuario';
 				const time = document.createElement('span');
 				const d = msg.ts ? new Date(msg.ts) : new Date();
-				time.textContent = d.toLocaleString();
+				time.textContent = formatDateTime24(d);
 				meta.appendChild(name);
 				meta.appendChild(role);
 				meta.appendChild(time);
