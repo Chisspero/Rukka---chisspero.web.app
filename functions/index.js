@@ -163,7 +163,8 @@ async function trimConversation(rtdb, db, userKey, cutoffTs) {
 
 exports.trimRealtimeConversations = onSchedule(
   {
-    schedule: '*/10 * * * *',
+    // Reducido de cada 10 minutos a 1 vez por hora para disminuir invocaciones (y costo)
+    schedule: '0 * * * *',
     timeZone: 'America/Argentina/Buenos_Aires',
     retryCount: 0,
     maxInstances: 1
@@ -187,6 +188,12 @@ exports.trimRealtimeConversations = onSchedule(
       aliasSnap.forEach(child => userKeys.add(child.key));
     } catch (err) {
       logger.error('No se pudo leer aliases', err);
+    }
+
+    // Si no hay usuarios detectados, salir rápido para ahorrar CPU-segundos
+    if (userKeys.size === 0) {
+      logger.info('Limpieza periódica: sin usuarios detectados, se omite ejecución.');
+      return;
     }
 
     const summary = {

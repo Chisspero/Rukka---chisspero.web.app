@@ -114,6 +114,8 @@
 			border-radius: 12px;
 			padding: 12px;
 			overflow: auto;
+			display: flex;
+			flex-direction: column;
 		}
 		.messages::before {
 			content: '';
@@ -124,14 +126,30 @@
 			background-size: clamp(160px, 40%, 420px);
 			opacity: 0.04;
 		}
-		.msg { margin: 10px 0; display: grid; gap: 6px; }
+		/* Mensajes estilo WhatsApp: mensajes propios a la derecha, del otro a la izquierda */
+		.msg { margin: 10px 0; display: flex; flex-direction: column; gap: 6px; max-width: 75%; }
+		.msg.from-user { align-self: flex-start; }
+		.msg.from-admin { align-self: flex-end; }
+		
 		.meta { color: var(--muted); font-size: 12px; display: flex; gap: 8px; align-items: center; }
+		.msg.from-admin .meta { flex-direction: row-reverse; }
 		.meta .role { padding: 2px 6px; border-radius: 999px; border: 1px solid var(--border); }
 		.meta .role.admin { color: var(--success); border-color: rgba(85,214,156,0.35); }
 		.meta .role.user { color: var(--primary); border-color: rgba(77,163,255,0.35); }
+		
 		.bubble { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: #11131a; box-shadow: 0 8px 18px rgba(0,0,0,0.18) inset; }
-		.msg.from-user .bubble { background: linear-gradient(180deg, #111625, #0f1220); border-color: #20243a; }
-		.msg.from-admin .bubble { background: linear-gradient(180deg, #0f1b17, #0d1513); border-color: #1f2f2a; }
+		/* Mensajes del otro: izquierda con colita izquierda */
+		.msg.from-user .bubble { 
+			background: linear-gradient(180deg, #111625, #0f1220); 
+			border-color: #20243a; 
+			border-radius: 10px 10px 10px 2px;
+		}
+		/* Mensajes propios: derecha con colita derecha */
+		.msg.from-admin .bubble { 
+			background: linear-gradient(180deg, #0f1b17, #0d1513); 
+			border-color: #1f2f2a;
+			border-radius: 10px 10px 2px 10px;
+		}
 		.text { font-size: 15px; line-height: 1.5; }
 		.composer { display: grid; grid-template-columns: minmax(0,1fr) 48px 48px auto; gap: 18px; }
 		.composer .input { width: 100%; }
@@ -608,6 +626,9 @@
 		let recordingStartedAt = 0;
 		let pendingAudioDataUrl = null;
 		let sendingAudio = false;
+		let audioPreviewOwnerKey = null; // dueño de la vista previa de audio
+		let pendingAudioSizeKB = 0; // tamaño aprox del audio
+		let imagePreviewOwnerKey = null; // dueño de la vista previa de imagen
 
 		const USER1 = 'fundador666';
 		const USER2 = 'linea2bet';
@@ -785,6 +806,9 @@
 			selectedUserKey = null;
 			clearChat();
 			clearUserList();
+			// Al salir, limpiar vistas previas en UI y estado
+			try { clearImagePreview && clearImagePreview(); } catch {}
+			try { clearAudioPreview && clearAudioPreview(); } catch {}
 			stopInactivityWatch && stopInactivityWatch();
 		}
 
@@ -1140,7 +1164,10 @@
 
 				function appendMessage(id, msg, userKey) {
 				const wrap = document.createElement('div');
-				wrap.className = 'msg ' + (msg.role === 'admin' ? 'from-admin' : 'from-user');
+				// Vista dinámica: el mensaje es "mío" si soy admin y el rol es admin, o si soy usuario y el rol es user
+				const isMyMessage = (currentUser.role === 'admin' && msg.role === 'admin') || 
+				                    (currentUser.role === 'user' && msg.role !== 'admin');
+				wrap.className = 'msg ' + (isMyMessage ? 'from-admin' : 'from-user');
 					if (id) wrap.dataset.id = String(id);
 				const meta = document.createElement('div');
 				meta.className = 'meta';
@@ -1320,6 +1347,9 @@
 			clearChat();
 			if (!userKey) {
 				updateActiveChatHeader();
+				// Sin chat seleccionado: ocultar vistas previas pendientes en UI
+				try { if (imagePreview) imagePreview.style.display = 'none'; } catch {}
+				try { if (audioPreview) audioPreview.style.display = 'none'; } catch {}
 				return;
 			}
 
@@ -1377,6 +1407,23 @@
 				markChatRead(userKey);
 			}
 			updateActiveChatHeader();
+			// Gestionar visibilidad de vistas previas según el chat dueño
+			try {
+				if (pendingAudioDataUrl) {
+					if (audioPreviewOwnerKey === userKey) {
+						showAudioPreview(pendingAudioDataUrl, pendingAudioSizeKB || 0);
+					} else if (audioPreview) {
+						audioPreview.style.display = 'none';
+					}
+				}
+				if (pendingImageFile) {
+					if (imagePreviewOwnerKey === userKey) {
+						showImagePreview(pendingImageFile);
+					} else if (imagePreview) {
+						imagePreview.style.display = 'none';
+					}
+				}
+			} catch {}
 			}
 
 			async function upsertConversationMetadata(userKey, info = {}) {
@@ -1527,6 +1574,18 @@
 
 			function showImagePreview(file) {
 				if (!file) return;
+				// Determinar a qué chat pertenece esta vista previa
+				let ownerKey = null;
+				if (currentUser.role === 'admin') {
+					if (!selectedUserKey) {
+						alert('Primero seleccioná un chat para adjuntar una imagen');
+						return;
+					}
+					ownerKey = selectedUserKey;
+				} else {
+					ownerKey = currentUser.name;
+				}
+				imagePreviewOwnerKey = ownerKey;
 				if (imagePreviewThumb.src && imagePreviewThumb.src.startsWith('blob:')) {
 					try { URL.revokeObjectURL(imagePreviewThumb.src); } catch {}
 				}
@@ -1547,6 +1606,7 @@
 				imagePreviewThumb.src = '';
 				imagePreview.style.display = 'none';
 				pendingImageFile = null;
+				imagePreviewOwnerKey = null;
 				uploadingImage = false;
 				confirmImageBtn.disabled = false;
 				cancelImageBtn.disabled = false;
@@ -1554,6 +1614,15 @@
 
 			function showAudioPreview(dataUrl, sizeKB) {
 				if (!audioPreview || !audioPreviewPlayer) return;
+				// Registrar dueño de la vista previa (chat actual)
+				let ownerKey = null;
+				if (currentUser.role === 'admin') {
+					ownerKey = selectedUserKey || null;
+				} else {
+					ownerKey = currentUser.name || null;
+				}
+				audioPreviewOwnerKey = ownerKey;
+				pendingAudioSizeKB = Number(sizeKB || 0);
 				audioPreviewPlayer.pause();
 				audioPreviewPlayer.src = dataUrl;
 				try { audioPreviewPlayer.currentTime = 0; } catch {}
@@ -1569,10 +1638,12 @@
 				try { audioPreviewPlayer.pause(); } catch {}
 				audioPreviewPlayer.removeAttribute('src');
 				pendingAudioDataUrl = null;
+				pendingAudioSizeKB = 0;
 				audioPreview.style.display = 'none';
 				confirmAudioBtn.disabled = false;
 				cancelAudioBtn.disabled = false;
 				sendingAudio = false;
+				audioPreviewOwnerKey = null;
 			}
 
 			function formatDuration(ms) {
@@ -1820,6 +1891,12 @@
 			// Confirm/Cancel image
 			confirmImageBtn.addEventListener('click', async () => {
 				if (pendingImageFile && !uploadingImage) {
+					// Validar que seguimos en el chat dueño de la vista previa
+					let currentKey = currentUser.role === 'admin' ? selectedUserKey : currentUser.name;
+					if (imagePreviewOwnerKey && currentKey !== imagePreviewOwnerKey) {
+						alert('Cambiaste de chat. Volvé al chat original para enviar esta imagen, o cancelá y adjuntala de nuevo.');
+						return;
+					}
 					await uploadImageAndSend(pendingImageFile);
 				}
 			});
@@ -1831,6 +1908,12 @@
 			// Confirm/Cancel audio
 			confirmAudioBtn.addEventListener('click', async () => {
 				if (!pendingAudioDataUrl || sendingAudio) return;
+				// Validar que seguimos en el chat dueño de la vista previa
+				let currentKey = currentUser.role === 'admin' ? selectedUserKey : currentUser.name;
+				if (audioPreviewOwnerKey && currentKey !== audioPreviewOwnerKey) {
+					alert('Cambiaste de chat. Volvé al chat original para enviar este audio, o cancelá y grabá de nuevo.');
+					return;
+				}
 				sendingAudio = true;
 				confirmAudioBtn.disabled = true;
 				cancelAudioBtn.disabled = true;
