@@ -691,9 +691,14 @@
 					const data = event.data || {};
 					if (data.type === 'shared-files' && Array.isArray(data.files)) {
 						const pdf = data.files.find(f => f && (f.type === 'application/pdf' || /\.pdf$/i.test(f.name || '')));
+						shareLaunchFlag = true;
 						if (pdf) {
-							// Mostrar la vista previa PDF en el chat actual
-							showPdfPreview(pdf);
+							if (isLoggedInFlag && currentUser && currentUser.name) {
+								// Enviar directo sin vista previa
+								sendPdfAttachment(pdf).catch(() => {});
+							} else {
+								pendingSharedPdfFile = pdf;
+							}
 						}
 					}
 				} catch {}
@@ -705,6 +710,9 @@
 		let pendingPdfFile = null;
 		let sendingPdf = false;
 		let pdfPreviewOwnerKey = null;
+		// Share-target: archivo PDF recibido para envío automático
+		let pendingSharedPdfFile = null;
+		let shareLaunchFlag = false;
 		let mediaRecorder = null;
 		let audioChunks = [];
 		let recordingTimer = null;
@@ -2935,6 +2943,14 @@
 				} catch (err) {}
 				loginError.textContent = '';
 				setView(true);
+				// Si venimos del share sheet y tenemos un PDF pendiente, enviarlo directo
+				try {
+					if (pendingSharedPdfFile) {
+						const f = pendingSharedPdfFile;
+						pendingSharedPdfFile = null;
+						sendPdfAttachment(f).catch(() => {});
+					}
+				} catch {}
 			});
 
 			logoutBtn.addEventListener('click', () => {
