@@ -539,7 +539,7 @@
 	<script type="module">
 	import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js';
 	import { getDatabase, ref, push, serverTimestamp, onChildAdded, query, limitToLast, limitToFirst, onValue, off, set, remove, get, orderByChild, endAt } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js';
-	import { getFirestore, collection, doc, addDoc, setDoc, deleteDoc, serverTimestamp as fsServerTimestamp, onSnapshot, where, query as fsQuery, getDocs, writeBatch, orderBy } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
+	import { getFirestore, collection, doc, addDoc, setDoc, deleteDoc, serverTimestamp as fsServerTimestamp, onSnapshot, where, query as fsQuery, getDocs, writeBatch, orderBy, limit, startAfter } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
 	import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-functions.js';
 
 		const firebaseConfig = {
@@ -634,6 +634,7 @@
 		const USER1 = 'fundador666';
 		const USER2 = 'linea2bet';
 		const FIRESTORE_HISTORY_LIMIT = 500; // Cantidad máxima de mensajes persistidos a recuperar por chat
+		const FIRESTORE_HISTORY_PAGE_SIZE = 80; // Cantidad de mensajes archivados a recuperar por bloque
 		const INACTIVITY_TIMEOUT_MS = 1000 * 60 * 5; // 5 minutos de inactividad (solo usuarios)
 		const NEW_MESSAGE_MAX_AGE_MS = 10000; // Considerar "nuevo" todo mensaje con menos de 10s
 		const SUPPORT_WHATSAPP_MESSAGE = 'En caso de tener un problema, contactarse al número de whatsapp: +54 1164147048';
@@ -671,6 +672,10 @@
 	let adminNotes = {};
 	let unsubscribeAdminNotes = null;
 	let messageIndex = new Map();
+	let firestoreHistoryState = null;
+	const SCROLL_BOTTOM_THRESHOLD_PX = 48;
+	let userIsNearBottom = true;
+	let shouldForceScrollToBottom = false;
 
 	onValue(ref(db, '.info/serverTimeOffset'), (snap) => {
 		try { serverTimeOffsetMs = Number(snap.val() || 0); } catch { serverTimeOffsetMs = 0; }
@@ -1275,22 +1280,23 @@
 				wrap.dataset.ts = String(msg.ts || 0);
 				// Insertar en el lugar correcto por ts (asc)
 				const ts = Number(wrap.dataset.ts || '0');
-				let inserted = false;
 				let node = messagesEl.lastElementChild;
 				while (node && Number(node.dataset.ts || '0') > ts) {
 					node = node.previousElementSibling;
 				}
 				if (!node) {
 					messagesEl.insertBefore(wrap, messagesEl.firstElementChild);
-					inserted = true;
 				} else {
 					// Insertar después del último menor o igual
 					messagesEl.insertBefore(wrap, node.nextElementSibling);
-					inserted = (node === messagesEl.lastElementChild);
 				}
-				// Auto-scroll sólo si el mensaje es el más nuevo
-				if (inserted) {
+				const isNewestMessage = wrap === messagesEl.lastElementChild;
+				const shouldScroll = shouldForceScrollToBottom || (userIsNearBottom && isNewestMessage);
+				if (shouldScroll) {
 					messagesEl.scrollTop = messagesEl.scrollHeight;
+				}
+				if (shouldForceScrollToBottom && isNewestMessage) {
+					shouldForceScrollToBottom = false;
 				}
 			}
 
@@ -1349,6 +1355,9 @@
 							messagesEl.innerHTML = '';
 							renderedMessageIds = new Set();
 							messageIndex = new Map();
+						firestoreHistoryState = null;
+							userIsNearBottom = true;
+							shouldForceScrollToBottom = false;
 							if (chatListener) {
 								try { off(chatListener.ref, 'child_added', chatListener.callback); } catch {}
 								chatListener = null;
@@ -1378,6 +1387,26 @@
 
 			const INITIAL_MESSAGE_LIMIT = 50;
 			const convQuery = query(convRef, orderByChild('ts'), limitToLast(INITIAL_MESSAGE_LIMIT));
+			get(convQuery).then((snapshot) => {
+				const data = snapshot.val() || {};
+				const entries = Object.entries(data).sort((a, b) => {
+					const valA = a[1] || {};
+					const valB = b[1] || {};
+					const tsA = typeof valA.ts === 'number' ? valA.ts : (typeof valA.timestamp === 'number' ? valA.timestamp : 0);
+					const tsB = typeof valB.ts === 'number' ? valB.ts : (typeof valB.timestamp === 'number' ? valB.timestamp : 0);
+					return tsA - tsB;
+				});
+				let appendedInitial = 0;
+				for (const [key, val] of entries) {
+					if (!renderedMessageIds.has(key)) {
+						appendMessageOnce(key, val, userKey);
+						appendedInitial++;
+					}
+				}
+				if (appendedInitial === 0) {
+					loadMoreFirestoreHistory(userKey).catch((err) => console.error('Error cargando historial inicial desde Firestore:', err));
+				}
+			}).catch((err) => console.error('Error obteniendo mensajes iniciales desde Realtime DB:', err));
 			const childAddedHandler = (snap) => {
 				const val = snap.val() || {};
 				if (!val.ts && val.timestamp) val.ts = val.timestamp;
@@ -1389,8 +1418,15 @@
 
 			const messagesEl = document.getElementById('messages');
 			let isLoadingOldMessages = false;
+			shouldForceScrollToBottom = true;
+			userIsNearBottom = true;
 
 			const scrollHandler = async () => {
+				const nearBottom = (messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight) <= SCROLL_BOTTOM_THRESHOLD_PX;
+				userIsNearBottom = nearBottom;
+				if (!nearBottom) {
+					shouldForceScrollToBottom = false;
+				}
 				if (messagesEl.scrollTop === 0 && !isLoadingOldMessages) {
 				isLoadingOldMessages = true;
 
@@ -1405,11 +1441,26 @@
 					const moreQuery = query(convRef, orderByChild('ts'), endAt(oldestTs - 1), limitToLast(INITIAL_MESSAGE_LIMIT));
 					const snapshot = await get(moreQuery);
 					const data = snapshot.val() || {};
-					const entries = Object.entries(data);
+					const entries = Object.entries(data).sort((a, b) => {
+						const valA = a[1] || {};
+						const valB = b[1] || {};
+						const tsA = typeof valA.ts === 'number' ? valA.ts : (typeof valA.timestamp === 'number' ? valA.timestamp : 0);
+						const tsB = typeof valB.ts === 'number' ? valB.ts : (typeof valB.timestamp === 'number' ? valB.timestamp : 0);
+						return tsA - tsB;
+					});
+					let appendedFromRealtime = 0;
 					for (const [key, val] of entries) {
-					if (!renderedMessageIds.has(key)) {
-						appendMessageOnce(key, val);
+						if (!renderedMessageIds.has(key)) {
+							appendMessageOnce(key, val, userKey);
+							appendedFromRealtime++;
+						}
 					}
+					if (appendedFromRealtime === 0) {
+						try {
+							await loadMoreFirestoreHistory(userKey);
+						} catch (fsErr) {
+							console.error('Error cargando historial archivado:', fsErr);
+						}
 					}
 				} catch (err) {
 					console.error("Error cargando mensajes antiguos:", err);
@@ -1444,6 +1495,11 @@
 					}
 				}
 			} catch {}
+			if (shouldForceScrollToBottom) {
+				requestAnimationFrame(() => {
+					try { messagesEl.scrollTop = messagesEl.scrollHeight; } catch {}
+				});
+			}
 			}
 
 			async function upsertConversationMetadata(userKey, info = {}) {
@@ -2270,14 +2326,87 @@
 			}
 
 			function subscribeFirestoreHistory(userKey) {
-				if (unsubscribeHistoryFS) { try { unsubscribeHistoryFS(); } catch {} unsubscribeHistoryFS = null; }
+				if (unsubscribeHistoryFS) {
+					try { unsubscribeHistoryFS(); } catch {}
+					unsubscribeHistoryFS = null;
+				}
+				if (!userKey) {
+					firestoreHistoryState = null;
+					return;
+				}
+				const normalized = (userKey || '').toLowerCase();
+				const sources = [];
+				if (normalized) {
+					sources.push({ field: 'userKeyNormalized', value: normalized, lastDoc: null, exhausted: false });
+				}
+				if (userKey && userKey !== normalized) {
+					sources.push({ field: 'userKey', value: userKey, lastDoc: null, exhausted: false });
+				}
+				if (!sources.length) {
+					firestoreHistoryState = null;
+					return;
+				}
+				firestoreHistoryState = {
+					userKey,
+					sources,
+					loading: false,
+					loadedCount: 0,
+					error: null
+				};
+				unsubscribeHistoryFS = () => {
+					firestoreHistoryState = null;
+				};
+			}
+
+			async function loadMoreFirestoreHistory(userKey) {
+				if (!firestoreHistoryState || firestoreHistoryState.userKey !== userKey) {
+					return { appended: 0 };
+				}
+				if (!firestoreHistoryState.sources || !firestoreHistoryState.sources.length) {
+					return { appended: 0 };
+				}
+				if (firestoreHistoryState.loading) {
+					return { appended: 0 };
+				}
+				const remaining = FIRESTORE_HISTORY_LIMIT - firestoreHistoryState.loadedCount;
+				if (remaining <= 0) {
+					firestoreHistoryState.sources.forEach((src) => { if (src) src.exhausted = true; });
+					return { appended: 0 };
+				}
+				firestoreHistoryState.loading = true;
 				try {
-					const col = collection(fs, 'mensajes');
-					const normalized = (userKey || '').toLowerCase();
-					const unsubs = [];
-					const handler = (snap) => {
-						const docs = snap.docs || [];
-						const entries = docs.map((d) => {
+					for (const source of firestoreHistoryState.sources) {
+						if (!source || !source.value || source.exhausted) continue;
+						const pageSize = Math.min(FIRESTORE_HISTORY_PAGE_SIZE, remaining);
+						const constraints = [
+							where(source.field, '==', source.value),
+							orderBy('ts', 'desc'),
+							limit(pageSize)
+						];
+						if (source.lastDoc) {
+							constraints.push(startAfter(source.lastDoc));
+						}
+						let snapshot;
+						try {
+							snapshot = await getDocs(fsQuery(collection(fs, 'mensajes'), ...constraints));
+						} catch (err) {
+							if (err && err.code === 'failed-precondition') {
+								console.warn('Hace falta crear el índice de Firestore para ordenar por "ts" en la colección mensajes.', err);
+								source.exhausted = true;
+								continue;
+							}
+							throw err;
+						}
+						if (snapshot.empty) {
+							source.exhausted = true;
+							continue;
+						}
+						const docs = snapshot.docs;
+						source.lastDoc = docs[docs.length - 1];
+						if (docs.length < pageSize) {
+							source.exhausted = true;
+						}
+						const mapped = docs.map((d) => {
 							const data = d.data() || {};
 							const id = data.rtdbKey || d.id;
 							const tsFromCreatedAt = data.createdAt && typeof data.createdAt.toMillis === 'function' ? data.createdAt.toMillis() : null;
@@ -2285,7 +2414,6 @@
 							const inferredType = data.type || (data.audioDataUrl ? 'audio' : ((data.imageDataUrl || data.imageUrl) ? 'image' : (data.text ? 'text' : null)));
 							return {
 								id,
-								ts,
 								msg: {
 									type: inferredType || undefined,
 									text: data.text || null,
@@ -2294,36 +2422,22 @@
 									name: data.name || null,
 									sender: data.sender || 'Anónimo',
 									role: data.role || 'user',
-									ts: ts
+									ts
 								}
 							};
-						}).sort((a, b) => (a.ts || 0) - (b.ts || 0));
-						const startIndex = Math.max(0, entries.length - FIRESTORE_HISTORY_LIMIT);
-						for (let i = startIndex; i < entries.length; i++) {
-							const { id, msg } = entries[i];
+						}).reverse();
+						for (const { id, msg } of mapped) {
 							appendMessageOnce(id, msg, userKey);
 						}
-						const lastEntry = entries.length ? entries[entries.length - 1] : null;
-						if (lastEntry) {
-							const msg = lastEntry.msg || {};
-							const type = msg.audioDataUrl ? 'audio' : (msg.imageDataUrl ? 'image' : 'text');
-							upsertConversationMetadata(userKey, {
-								type,
-								text: msg.text || null,
-								name: msg.name || null,
-								sender: msg.sender,
-								role: msg.role,
-								ts: msg.ts
-							}).catch((err) => console.warn('No se pudo actualizar metadata desde historial:', err));
+						firestoreHistoryState.loadedCount += mapped.length;
+						if (firestoreHistoryState.loadedCount >= FIRESTORE_HISTORY_LIMIT) {
+							firestoreHistoryState.sources.forEach((src) => { if (src) src.exhausted = true; });
 						}
-					};
-					unsubs.push(onSnapshot(fsQuery(col, where('userKeyNormalized', '==', normalized)), handler, (err) => console.warn('Error hist FS normalized', err)));
-					if (normalized !== userKey) {
-						unsubs.push(onSnapshot(fsQuery(col, where('userKey', '==', userKey)), handler, (err) => console.warn('Error hist FS legacy', err)));
+						return { appended: mapped.length };
 					}
-					unsubscribeHistoryFS = () => { unsubs.forEach(u => { try { u(); } catch {} }); };
-				} catch (err) {
-					console.warn('No se pudo suscribir a historial FS', err);
+					return { appended: 0 };
+				} finally {
+					firestoreHistoryState.loading = false;
 				}
 			}
 
