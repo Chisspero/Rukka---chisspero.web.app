@@ -633,7 +633,8 @@
 
 		const USER1 = 'fundador666';
 		const USER2 = 'linea2bet';
-		const FIRESTORE_HISTORY_LIMIT = 500; // Cantidad máxima de mensajes persistidos a recuperar por chat
+		const FIRESTORE_HISTORY_LIMIT = 50; // Cantidad inicial de mensajes a cargar (optimizado para velocidad)
+		const FIRESTORE_PAGINATION_SIZE = 50; // Cantidad de mensajes a cargar en cada paginación hacia atrás
 		const INACTIVITY_TIMEOUT_MS = 1000 * 60 * 5; // 5 minutos de inactividad (solo usuarios)
 		const NEW_MESSAGE_MAX_AGE_MS = 10000; // Considerar "nuevo" todo mensaje con menos de 10s
 		const SUPPORT_WHATSAPP_MESSAGE = 'En caso de tener un problema, contactarse al número de whatsapp: +54 1164147048';
@@ -671,6 +672,8 @@
 	let adminNotes = {};
 	let unsubscribeAdminNotes = null;
 	let messageIndex = new Map();
+	let firestoreOldestLoadedTs = {}; // { userKey: timestamp } - tracking para paginación de Firestore
+	let firestoreHasMore = {}; // { userKey: boolean } - indica si hay más mensajes viejos por cargar
 
 	onValue(ref(db, '.info/serverTimeOffset'), (snap) => {
 		try { serverTimeOffsetMs = Number(snap.val() || 0); } catch { serverTimeOffsetMs = 0; }
@@ -1376,7 +1379,7 @@
 			const convRef = ref(db, 'chat/conversaciones/' + userKey);
 			subscribeFirestoreHistory(userKey);
 
-			const INITIAL_MESSAGE_LIMIT = 50;
+			const INITIAL_MESSAGE_LIMIT = 30; // Reducido para carga más rápida
 			const convQuery = query(convRef, orderByChild('ts'), limitToLast(INITIAL_MESSAGE_LIMIT));
 			const childAddedHandler = (snap) => {
 				const val = snap.val() || {};
@@ -1402,14 +1405,22 @@
 				}
 
 				try {
-					const moreQuery = query(convRef, orderByChild('ts'), endAt(oldestTs - 1), limitToLast(INITIAL_MESSAGE_LIMIT));
+					// 1) Intentar cargar más desde RTDB
+					const moreQuery = query(convRef, orderByChild('ts'), endAt(oldestTs - 1), limitToLast(30));
 					const snapshot = await get(moreQuery);
 					const data = snapshot.val() || {};
 					const entries = Object.entries(data);
+					let loadedFromRTDB = 0;
 					for (const [key, val] of entries) {
-					if (!renderedMessageIds.has(key)) {
-						appendMessageOnce(key, val);
+						if (!renderedMessageIds.has(key)) {
+							appendMessageOnce(key, val, userKey);
+							loadedFromRTDB++;
+						}
 					}
+
+					// 2) Si no hay más en RTDB y Firestore tiene más historial, cargar desde allí
+					if (loadedFromRTDB === 0 && firestoreHasMore[userKey]) {
+						await loadMoreFromFirestore(userKey, oldestTs);
 					}
 				} catch (err) {
 					console.error("Error cargando mensajes antiguos:", err);
@@ -2271,12 +2282,31 @@
 
 			function subscribeFirestoreHistory(userKey) {
 				if (unsubscribeHistoryFS) { try { unsubscribeHistoryFS(); } catch {} unsubscribeHistoryFS = null; }
+				
+				// Resetear tracking de paginación para este chat
+				firestoreOldestLoadedTs[userKey] = null;
+				firestoreHasMore[userKey] = true; // Asumimos que hay historial hasta que se demuestre lo contrario
+				
 				try {
 					const col = collection(fs, 'mensajes');
 					const normalized = (userKey || '').toLowerCase();
 					const unsubs = [];
+					
+					// Query optimizado: solo los últimos N mensajes, ordenados desc para traer los más recientes
+					const q = fsQuery(
+						col, 
+						where('userKeyNormalized', '==', normalized),
+						orderBy('ts', 'desc'),
+						limitToFirst(FIRESTORE_HISTORY_LIMIT)
+					);
+					
 					const handler = (snap) => {
 						const docs = snap.docs || [];
+						if (docs.length === 0) {
+							firestoreHasMore[userKey] = false;
+							return;
+						}
+						
 						const entries = docs.map((d) => {
 							const data = d.data() || {};
 							const id = data.rtdbKey || d.id;
@@ -2297,12 +2327,27 @@
 									ts: ts
 								}
 							};
-						}).sort((a, b) => (a.ts || 0) - (b.ts || 0));
-						const startIndex = Math.max(0, entries.length - FIRESTORE_HISTORY_LIMIT);
-						for (let i = startIndex; i < entries.length; i++) {
-							const { id, msg } = entries[i];
+						}).sort((a, b) => (a.ts || 0) - (b.ts || 0)); // Ordenar ascendente para renderizado
+						
+						// Tracking: guardar el timestamp más viejo cargado
+						if (entries.length > 0) {
+							const oldest = entries[0].ts || 0;
+							if (!firestoreOldestLoadedTs[userKey] || oldest < firestoreOldestLoadedTs[userKey]) {
+								firestoreOldestLoadedTs[userKey] = oldest;
+							}
+						}
+						
+						// Si cargamos menos mensajes que el límite, no hay más historial
+						if (docs.length < FIRESTORE_HISTORY_LIMIT) {
+							firestoreHasMore[userKey] = false;
+						}
+						
+						// Renderizar todos los mensajes cargados
+						for (const { id, msg } of entries) {
 							appendMessageOnce(id, msg, userKey);
 						}
+						
+						// Actualizar metadata con el último mensaje
 						const lastEntry = entries.length ? entries[entries.length - 1] : null;
 						if (lastEntry) {
 							const msg = lastEntry.msg || {};
@@ -2317,13 +2362,93 @@
 							}).catch((err) => console.warn('No se pudo actualizar metadata desde historial:', err));
 						}
 					};
-					unsubs.push(onSnapshot(fsQuery(col, where('userKeyNormalized', '==', normalized)), handler, (err) => console.warn('Error hist FS normalized', err)));
+					
+					unsubs.push(onSnapshot(q, handler, (err) => console.warn('Error hist FS normalized', err)));
+					
+					// Fallback para userKey legacy (sin normalizar)
 					if (normalized !== userKey) {
-						unsubs.push(onSnapshot(fsQuery(col, where('userKey', '==', userKey)), handler, (err) => console.warn('Error hist FS legacy', err)));
+						const qLegacy = fsQuery(
+							col, 
+							where('userKey', '==', userKey),
+							orderBy('ts', 'desc'),
+							limitToFirst(FIRESTORE_HISTORY_LIMIT)
+						);
+						unsubs.push(onSnapshot(qLegacy, handler, (err) => console.warn('Error hist FS legacy', err)));
 					}
+					
 					unsubscribeHistoryFS = () => { unsubs.forEach(u => { try { u(); } catch {} }); };
 				} catch (err) {
 					console.warn('No se pudo suscribir a historial FS', err);
+					firestoreHasMore[userKey] = false;
+				}
+			}
+
+			// Función para cargar más mensajes viejos desde Firestore (paginación hacia atrás)
+			async function loadMoreFromFirestore(userKey, beforeTs) {
+				if (!firestoreHasMore[userKey]) return;
+				
+				try {
+					const col = collection(fs, 'mensajes');
+					const normalized = (userKey || '').toLowerCase();
+					const oldestLoaded = firestoreOldestLoadedTs[userKey] || beforeTs;
+					
+					// Query: mensajes más viejos que el timestamp más antiguo ya cargado
+					const q = fsQuery(
+						col,
+						where('userKeyNormalized', '==', normalized),
+						where('ts', '<', oldestLoaded),
+						orderBy('ts', 'desc'),
+						limitToFirst(FIRESTORE_PAGINATION_SIZE)
+					);
+					
+					const snapshot = await getDocs(q);
+					const docs = snapshot.docs || [];
+					
+					if (docs.length === 0) {
+						firestoreHasMore[userKey] = false;
+						return;
+					}
+					
+					const entries = docs.map((d) => {
+						const data = d.data() || {};
+						const id = data.rtdbKey || d.id;
+						const tsFromCreatedAt = data.createdAt && typeof data.createdAt.toMillis === 'function' ? data.createdAt.toMillis() : null;
+						const ts = (typeof data.ts === 'number') ? data.ts : (tsFromCreatedAt ?? (d.createTime ? d.createTime.toMillis() : Date.now()));
+						const inferredType = data.type || (data.audioDataUrl ? 'audio' : ((data.imageDataUrl || data.imageUrl) ? 'image' : (data.text ? 'text' : null)));
+						return {
+							id,
+							ts,
+							msg: {
+								type: inferredType || undefined,
+								text: data.text || null,
+								imageDataUrl: data.imageDataUrl || data.imageUrl || null,
+								audioDataUrl: data.audioDataUrl || null,
+								name: data.name || null,
+								sender: data.sender || 'Anónimo',
+								role: data.role || 'user',
+								ts: ts
+							}
+						};
+					}).sort((a, b) => (a.ts || 0) - (b.ts || 0));
+					
+					// Actualizar tracking
+					if (entries.length > 0) {
+						const oldest = entries[0].ts || 0;
+						firestoreOldestLoadedTs[userKey] = oldest;
+					}
+					
+					if (docs.length < FIRESTORE_PAGINATION_SIZE) {
+						firestoreHasMore[userKey] = false;
+					}
+					
+					// Renderizar mensajes paginados
+					for (const { id, msg } of entries) {
+						appendMessageOnce(id, msg, userKey);
+					}
+					
+				} catch (err) {
+					console.warn('Error cargando más mensajes desde Firestore:', err);
+					firestoreHasMore[userKey] = false;
 				}
 			}
 
