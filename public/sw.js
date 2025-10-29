@@ -56,4 +56,10 @@ self.addEventListener('fetch', (event) => {
     })());
     return;
   }
+
+  // Fallback para GET a /share-target (por si el navegador navega directo)
+  if (url.pathname === '/share-target' && event.request.method === 'GET') {
+    event.respondWith(Response.redirect('/?share=1', 303));
+    return;
+  }
 });
