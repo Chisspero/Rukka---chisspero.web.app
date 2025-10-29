@@ -183,7 +183,11 @@
 		.shortcut-card:active { transform: translateY(0); }
 		.image-msg { margin-top: 4px; }
 		.image-msg img { max-width: 100%; height: auto; border-radius: 10px; border: 1px solid var(--border); cursor: pointer; }
-		.audio-msg { margin-top: 4px; }
+		.audio-msg { 
+			margin-top: 4px; 
+			min-width: clamp(240px, 42vw, 380px);
+			max-width: 100%;
+		}
 		.audio-msg audio { 
 			width: 100%; 
 			outline: none; 
@@ -1182,15 +1186,20 @@
 					if (id) wrap.dataset.id = String(id);
 				const meta = document.createElement('div');
 				meta.className = 'meta';
-				const name = document.createElement('span');
-				name.textContent = msg.sender || 'Anónimo';
+				// Ocultar el nombre textual cuando el remitente es admin (queda solo el chip "Admin")
+				const shouldShowSenderName = msg.role !== 'admin';
+				let name;
+				if (shouldShowSenderName) {
+					name = document.createElement('span');
+					name.textContent = msg.sender || 'Anónimo';
+				}
 				const role = document.createElement('span');
 				role.className = 'role ' + (msg.role === 'admin' ? 'admin' : 'user');
 				role.textContent = msg.role === 'admin' ? 'Admin' : 'Usuario';
 				const time = document.createElement('span');
 				const d = msg.ts ? new Date(msg.ts) : new Date();
 				time.textContent = formatDateTime24(d);
-				meta.appendChild(name);
+				if (shouldShowSenderName && name) meta.appendChild(name);
 				meta.appendChild(role);
 				meta.appendChild(time);
 					// Botón eliminar para mensajes del admin (visible solo al admin)
@@ -2409,8 +2418,6 @@
 							preview.style.cssText = 'font-size:11px;color:#a0a6b7;margin-top:2px;text-align:left;';
 							btn.appendChild(preview);
 						}
-						// Calcular no leídos: usar contador en memoria cuando exista (mensajes nuevos en esta sesión),
-						// o derivar 1/0 comparando lastMessageTs vs último leído persistido
 						let unreadCount = (typeof unreadCounts[userKey] === 'number') ? unreadCounts[userKey] : 0;
 						if (unreadCount === 0) {
 							const readTs = adminReadState[userKey] || 0;
