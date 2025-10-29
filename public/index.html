@@ -408,10 +408,8 @@
 				<div class="header">
 					<div class="title"><img src="assets/logo.png" alt="Logo" class="badge-logo" style="margin-right:8px"/>Cajeros linea 2 (kensho, enzo, rukka, jynx)</div>
 					<div>
-						<span class="badge" id="roleBadge">Usuario</span>
 						<span class="badge" id="nameBadge">-</span>
 						<span class="badge" id="adminNoteBadge" style="display:none;"></span>
-
 						<button class="btn" id="logoutBtn" type="button" title="Cerrar sesión">Salir</button>
 					</div>
 				</div>
@@ -562,7 +560,6 @@
 		const passwordEl = document.getElementById('password');
 		const loginBtn = document.getElementById('loginBtn');
 		const loginError = document.getElementById('loginError');
-		const roleBadge = document.getElementById('roleBadge');
 		const nameBadge = document.getElementById('nameBadge');
 		const adminNoteBadge = document.getElementById('adminNoteBadge');
 		const messagesEl = document.getElementById('messages');
@@ -797,7 +794,6 @@
 		if (shortcutsCard) shortcutsCard.style.display = (isLoggedIn && isAdmin) ? '' : 'none';
 
 		if (isLoggedIn) {
-			roleBadge.textContent = isAdmin ? 'Administrador' : 'Usuario';
 			messageInput.value = '';
 			messageInput.focus();
 			if (isAdmin) {
