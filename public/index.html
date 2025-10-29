@@ -539,7 +539,7 @@
 	<script type="module">
 	import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js';
 	import { getDatabase, ref, push, serverTimestamp, onChildAdded, query, limitToLast, limitToFirst, onValue, off, set, remove, get, orderByChild, endAt } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js';
-	import { getFirestore, collection, doc, addDoc, setDoc, deleteDoc, serverTimestamp as fsServerTimestamp, onSnapshot, where, query as fsQuery, getDocs, writeBatch, orderBy, limit } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
+	import { getFirestore, collection, doc, addDoc, setDoc, deleteDoc, serverTimestamp as fsServerTimestamp, onSnapshot, where, query as fsQuery, getDocs, writeBatch, orderBy } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
 	import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-functions.js';
 
 		const firebaseConfig = {
@@ -742,20 +742,6 @@
 				if (document.visibilityState === 'visible') resetInactivityTimer();
 			});
 			inactivityHandlersBound = true;
-		}
-
-		// Forzar scroll al final con algunos retries para asegurar posición tras cargas asincrónicas
-		function scrollToBottomSmooth() {
-			try {
-				const el = messagesEl;
-				if (!el) return;
-				const doScroll = () => { try { el.scrollTop = el.scrollHeight; } catch {} };
-				doScroll();
-				requestAnimationFrame(doScroll);
-				setTimeout(doScroll, 60);
-				setTimeout(doScroll, 140);
-				setTimeout(doScroll, 260);
-			} catch {}
 		}
 
 		function startInactivityWatch() {
@@ -1446,8 +1432,6 @@
 			messagesEl.addEventListener('scroll', scrollHandler);
 			messagesScrollHandler = scrollHandler;
 			selectedUserKey = userKey;
-			// Asegurar que, al abrir el chat, la vista quede en el último mensaje
-			scrollToBottomSmooth();
 			clearUnread(userKey);
 			// Marcar como leído persistentemente al abrir el chat (solo admin)
 			if (currentUser.role === 'admin') {
@@ -2313,7 +2297,7 @@
 						col, 
 						where('userKeyNormalized', '==', normalized),
 						orderBy('ts', 'desc'),
-						limit(FIRESTORE_HISTORY_LIMIT)
+						limitToFirst(FIRESTORE_HISTORY_LIMIT)
 					);
 					
 					const handler = (snap) => {
@@ -2362,8 +2346,6 @@
 						for (const { id, msg } of entries) {
 							appendMessageOnce(id, msg, userKey);
 						}
-						// Asegurar foco en el final después de la carga inicial
-						scrollToBottomSmooth();
 						
 						// Actualizar metadata con el último mensaje
 						const lastEntry = entries.length ? entries[entries.length - 1] : null;
@@ -2389,7 +2371,7 @@
 							col, 
 							where('userKey', '==', userKey),
 							orderBy('ts', 'desc'),
-							limit(FIRESTORE_HISTORY_LIMIT)
+							limitToFirst(FIRESTORE_HISTORY_LIMIT)
 						);
 						unsubs.push(onSnapshot(qLegacy, handler, (err) => console.warn('Error hist FS legacy', err)));
 					}
@@ -2416,7 +2398,7 @@
 						where('userKeyNormalized', '==', normalized),
 						where('ts', '<', oldestLoaded),
 						orderBy('ts', 'desc'),
-						limit(FIRESTORE_PAGINATION_SIZE)
+						limitToFirst(FIRESTORE_PAGINATION_SIZE)
 					);
 					
 					const snapshot = await getDocs(q);
