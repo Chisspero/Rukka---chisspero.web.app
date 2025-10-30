@@ -592,7 +592,7 @@
 
 	<script type="module">
 	import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js';
-	import { getDatabase, ref, push, serverTimestamp, onChildAdded, query, limitToLast, limitToFirst, onValue, off, set, remove, get, orderByChild, endAt, update } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js';
+	import { getDatabase, ref, push, serverTimestamp, onChildAdded, onChildChanged, query, limitToLast, limitToFirst, onValue, off, set, remove, get, orderByChild, endAt, update } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js';
 	import { getFirestore, collection, doc, addDoc, setDoc, deleteDoc, serverTimestamp as fsServerTimestamp, onSnapshot, where, query as fsQuery, getDocs, writeBatch, orderBy } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
 	import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-functions.js';
 
@@ -1375,7 +1375,8 @@
 					aWrap.appendChild(audio);
 					wrap.appendChild(aWrap);
 				}
-				if (msg.type === 'pdf' && msg.pdfDataUrl) {
+				if (msg.type === 'pdf') {
+					const haveUrl = !!(msg.pdfUrl || msg.pdfDataUrl);
 					const fileWrap = document.createElement('div');
 					fileWrap.className = 'file-msg bubble';
 					const icon = document.createElement('div');
@@ -1384,19 +1385,17 @@
 					const details = document.createElement('div');
 					details.className = 'file-details';
 					const link = document.createElement('a');
-					link.href = msg.pdfDataUrl;
 					link.target = '_blank';
 					link.rel = 'noopener';
-					link.download = msg.name || 'documento.pdf';
 					link.textContent = msg.name || 'Documento PDF';
+					link.href = haveUrl ? (msg.pdfUrl || msg.pdfDataUrl) : '#';
+					if (haveUrl) link.download = msg.name || 'documento.pdf';
 					details.appendChild(link);
 					const sizeBytes = typeof msg.size === 'number' ? msg.size : null;
-					if (sizeBytes && sizeBytes > 0) {
-						const meta = document.createElement('div');
-						meta.className = 'file-meta';
-						meta.textContent = formatFileSize(sizeBytes);
-						details.appendChild(meta);
-					}
+					const meta = document.createElement('div');
+					meta.className = 'file-meta';
+					meta.textContent = (sizeBytes && sizeBytes > 0) ? formatFileSize(sizeBytes) : (haveUrl ? '' : 'Subiendo PDF...');
+					details.appendChild(meta);
 					fileWrap.appendChild(icon);
 					fileWrap.appendChild(details);
 					wrap.appendChild(fileWrap);
@@ -1524,6 +1523,56 @@
 				}
 			}
 
+			function updatePdfDom(uniqueId, msg) {
+				const el = document.getElementById('msg_' + String(uniqueId));
+				if (!el) return;
+				let fileWrap = el.querySelector('.file-msg');
+				const haveUrl = !!(msg.pdfUrl || msg.pdfDataUrl);
+				if (!fileWrap && (msg.type === 'pdf')) {
+					fileWrap = document.createElement('div');
+					fileWrap.className = 'file-msg bubble';
+					const icon = document.createElement('div');
+					icon.className = 'file-icon';
+					icon.textContent = '📄';
+					const details = document.createElement('div');
+					details.className = 'file-details';
+					const link = document.createElement('a');
+					link.textContent = msg.name || 'Documento PDF';
+					link.target = '_blank';
+					link.rel = 'noopener';
+					link.href = haveUrl ? (msg.pdfUrl || msg.pdfDataUrl) : '#';
+					if (haveUrl) link.download = msg.name || 'documento.pdf';
+					details.appendChild(link);
+					const meta = document.createElement('div');
+					meta.className = 'file-meta';
+					meta.textContent = (typeof msg.size === 'number' && msg.size > 0) ? formatFileSize(msg.size) : (haveUrl ? '' : 'Subiendo PDF...');
+					details.appendChild(meta);
+					fileWrap.appendChild(icon);
+					fileWrap.appendChild(details);
+					el.appendChild(fileWrap);
+					return;
+				}
+				if (fileWrap) {
+					const link = fileWrap.querySelector('a') || (() => { const a = document.createElement('a'); a.target = '_blank'; a.rel = 'noopener'; fileWrap.querySelector('.file-details')?.appendChild(a); return a; })();
+					if (haveUrl) {
+						link.href = msg.pdfUrl || msg.pdfDataUrl;
+						link.download = msg.name || 'documento.pdf';
+						const meta = fileWrap.querySelector('.file-meta');
+						if (meta && (!meta.textContent || /Subiendo/i.test(meta.textContent))) meta.textContent = (typeof msg.size === 'number' && msg.size > 0) ? formatFileSize(msg.size) : '';
+					}
+				}
+			}
+
+			function handleChildChanged(uniqueId, newMsg, userKey) {
+				messageIndex.set(uniqueId, { msg: newMsg, userKey });
+				if ('reactionHeart' in newMsg) {
+					updateReactionDom(uniqueId, !!newMsg.reactionHeart);
+				}
+				if (newMsg && newMsg.type === 'pdf') {
+					updatePdfDom(uniqueId, newMsg);
+				}
+			}
+
 			async function toggleMessageReaction(uniqueId) {
 				try {
 					if (!uniqueId) return;
@@ -1601,6 +1650,13 @@
 			};
 			onChildAdded(convQuery, childAddedHandler);
 			chatListener = { ref: convQuery, callback: childAddedHandler };
+
+			// Reflejar cambios en tiempo real (reacciones, URL PDF) sin recargar
+			onChildChanged(convQuery, (snap) => {
+				const val = snap.val() || {};
+				if (!val.ts && val.timestamp) val.ts = val.timestamp;
+				handleChildChanged(snap.key, val, userKey);
+			});
 
 			const messagesEl = document.getElementById('messages');
 			let isLoadingOldMessages = false;
@@ -2171,41 +2227,50 @@
 				}
 				if (!userChatKey) return;
 				const convRef = ref(db, 'chat/conversaciones/' + userChatKey);
-				const dataUrl = await fileToDataUrl(file);
-				const payload = {
+				// 1) Enviar placeholder inmediato para percepción de "tiempo real"
+				const basePayload = {
 					type: 'pdf',
-					pdfDataUrl: dataUrl,
 					name: file.name || null,
 					size: typeof file.size === 'number' ? file.size : null,
 					sender: currentUser.role === 'admin' ? 'Administrador' : currentUser.name || 'Anónimo',
 					role: currentUser.role,
 					ts: nowMs(),
-					timestamp: serverTimestamp()
+					timestamp: serverTimestamp(),
+					uploading: true
 				};
 				const newRef = push(convRef);
-				await set(newRef, payload);
-				try {
-					await addDoc(collection(fs, 'mensajes'), {
-						...payload,
-						userKey: userChatKey,
-						userKeyNormalized: (userChatKey || '').toLowerCase(),
-						rtdbKey: newRef.key || null,
-						createdAt: fsServerTimestamp()
-					});
-					appendMessageOnce(newRef.key, payload, userChatKey);
-				} catch (err) {
-					console.warn('No se pudo archivar PDF en base de datos:', err);
-				}
+				await set(newRef, basePayload);
+				appendMessageOnce(newRef.key, basePayload, userChatKey);
 				try {
 					await upsertConversationMetadata(userChatKey, {
 						type: 'pdf',
-						name: payload.name || null,
-						sender: payload.sender,
-						role: payload.role,
-						ts: payload.ts
+						name: basePayload.name || null,
+						sender: basePayload.sender,
+						role: basePayload.role,
+						ts: basePayload.ts
 					});
+				} catch {}
+				// 2) Codificar a Data URL y actualizar mensaje existente
+				try {
+					const dataUrl = await fileToDataUrl(file);
+					await update(newRef, { pdfDataUrl: dataUrl, uploading: null });
+					// 3) Archivar en Firestore con URL incrustada (puede fallar si excede tamaño)
+					try {
+						await addDoc(collection(fs, 'mensajes'), {
+							...basePayload,
+							pdfDataUrl: dataUrl,
+							uploading: null,
+							userKey: userChatKey,
+							userKeyNormalized: (userChatKey || '').toLowerCase(),
+							rtdbKey: newRef.key || null,
+							createdAt: fsServerTimestamp()
+						});
+					} catch (err) {
+						console.warn('No se pudo archivar PDF en base de datos:', err);
+					}
 				} catch (err) {
-					console.warn('No se pudo actualizar metadata de conversación (pdf):', err);
+					console.error('Error preparando/enviando PDF:', err);
+					throw err;
 				}
 			}
 
