@@ -750,7 +750,8 @@
 		}
 		if (ageNoBtn) {
 			ageNoBtn.addEventListener('click', () => {
-				if (ageMsg) ageMsg.textContent = 'Debés ser mayor de 18 años para usar este servicio.';
+				// Redirigir a página principal de Google si indica que es menor
+				try { window.location.replace('https://www.google.com/'); } catch { window.location.href = 'https://www.google.com/'; }
 			});
 		}
 
