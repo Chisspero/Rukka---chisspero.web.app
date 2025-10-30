@@ -2909,7 +2909,6 @@
 							updateActiveChatHeader();
 						}
 					}
-
 					async function deleteUserChat(userKey) {
 						try {
 							await remove(ref(db, 'chat/conversaciones/' + userKey));
@@ -2930,7 +2929,6 @@
 							updateActiveChatHeader();
 						}
 					}
-
 			loginBtn.addEventListener('click', async () => {
 				const user = (usernameEl.value || '').trim();
 				const pass = (passwordEl.value || '').trim();
@@ -2954,7 +2952,6 @@
 				const normalized = user.toLowerCase();
 				currentUser = { name: normalized, role: 'user', displayName: user };
 				selectedUserKey = normalized;
-				// Guardar alias del usuario (visible para admin) si no existe
 				try {
 					const aliasRef = ref(db, 'chat/aliases/' + normalized);
 					const snap = await get(aliasRef);
@@ -2964,7 +2961,6 @@
 				} catch (err) {}
 				loginError.textContent = '';
 				setView(true);
-				// Si venimos del share sheet y tenemos un PDF pendiente, enviarlo directo
 				try {
 					if (pendingSharedPdfFile) {
 						const f = pendingSharedPdfFile;
@@ -2992,7 +2988,6 @@
 		updateClosedStateUI();
 		setInterval(updateClosedStateUI, 60 * 1000);
 		setView(false);
-		// Mostrar verificación de edad si corresponde
 		ensureAgeGate();
 		if (closedDismissBtn) {
 			closedDismissBtn.addEventListener('click', () => {
