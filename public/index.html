@@ -186,6 +186,10 @@
 			padding: 4px 8px;
 			filter: invert(0.85) hue-rotate(200deg) saturate(0.7);
 		}
+		/* Reacciones */
+		.reaction-heart { font-size: 18px; margin-top: 2px; user-select: none; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.35)); }
+		.msg.from-admin .reaction-heart { align-self: flex-end; }
+		.msg.from-user .reaction-heart { align-self: flex-start; }
 		.file-msg {
 			margin-top: 4px;
 			display: flex;
@@ -588,7 +592,7 @@
 
 	<script type="module">
 	import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js';
-	import { getDatabase, ref, push, serverTimestamp, onChildAdded, query, limitToLast, limitToFirst, onValue, off, set, remove, get, orderByChild, endAt } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js';
+	import { getDatabase, ref, push, serverTimestamp, onChildAdded, query, limitToLast, limitToFirst, onValue, off, set, remove, get, orderByChild, endAt, update } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js';
 	import { getFirestore, collection, doc, addDoc, setDoc, deleteDoc, serverTimestamp as fsServerTimestamp, onSnapshot, where, query as fsQuery, getDocs, writeBatch, orderBy } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
 	import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-functions.js';
 
@@ -1298,7 +1302,11 @@
 				const isMyMessage = (currentUser.role === 'admin' && msg.role === 'admin') || 
 				                    (currentUser.role === 'user' && msg.role !== 'admin');
 				wrap.className = 'msg ' + (isMyMessage ? 'from-admin' : 'from-user');
-					if (id) wrap.dataset.id = String(id);
+				// id estable para facilitar actualizaciones UI (reacciones)
+				if (id) {
+					wrap.dataset.id = String(id);
+					wrap.id = 'msg_' + String(id);
+				}
 				const meta = document.createElement('div');
 				meta.className = 'meta';
 				// Ocultar el nombre textual cuando el remitente es admin (queda solo el chip "Admin")
@@ -1412,6 +1420,19 @@
 					}
 					wrap.appendChild(text);
 				}
+				// Reacción (corazón) si corresponde
+				if (msg.reactionHeart) {
+					const r = document.createElement('div');
+					r.className = 'reaction-heart';
+					r.textContent = '❤️';
+					wrap.appendChild(r);
+				}
+				// Toggle reacción con clic derecho
+				wrap.addEventListener('contextmenu', (e) => {
+					e.preventDefault();
+					if (!id) return;
+					toggleMessageReaction(String(id));
+				});
 				// Guardar ts para ordenamiento estable en el DOM
 				wrap.dataset.ts = String(msg.ts || 0);
 				// Insertar en el lugar correcto por ts (asc)
@@ -1483,6 +1504,57 @@
 				} catch (err) {
 					console.error('Error al borrar el mensaje:', err);
 					throw err;
+				}
+			}
+
+			// Toggle de reacción (corazón) y actualización en BD y UI
+			function updateReactionDom(uniqueId, reacted) {
+				const el = document.getElementById('msg_' + String(uniqueId));
+				if (!el) return;
+				let node = el.querySelector('.reaction-heart');
+				if (reacted) {
+					if (!node) {
+						node = document.createElement('div');
+						node.className = 'reaction-heart';
+						node.textContent = '❤️';
+						el.appendChild(node);
+					}
+				} else {
+					if (node) node.remove();
+				}
+			}
+
+			async function toggleMessageReaction(uniqueId) {
+				try {
+					if (!uniqueId) return;
+					const info = messageIndex.get(uniqueId);
+					if (!info) return;
+					const { msg, userKey } = info;
+					const newVal = !msg.reactionHeart;
+					// RTDB: actualizar campo reactionHeart
+					try {
+						await update(ref(db, `chat/conversaciones/${userKey}/${uniqueId}`), { reactionHeart: newVal });
+					} catch (err) {
+						console.warn('No se pudo actualizar reacción en RTDB:', err);
+					}
+					// UI local
+					msg.reactionHeart = newVal;
+					updateReactionDom(uniqueId, newVal);
+					// Firestore (histórico): actualizar si existe
+					try {
+						const colRef = collection(fs, 'mensajes');
+						const q = fsQuery(colRef, where('rtdbKey', '==', uniqueId), where('userKeyNormalized', '==', (userKey || '').toLowerCase()));
+						const snap = await getDocs(q);
+						if (!snap.empty) {
+							const batch = writeBatch(fs);
+							snap.forEach(d => batch.update(d.ref, { reactionHeart: newVal, updatedAt: fsServerTimestamp() }));
+							await batch.commit();
+						}
+					} catch (err) {
+						console.warn('No se pudo actualizar reacción en base de datos (historial):', err);
+					}
+				} catch (err) {
+					console.error('Error alternando reacción:', err);
 				}
 			}
 
