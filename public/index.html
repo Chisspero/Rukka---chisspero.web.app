@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 	<meta charset="UTF-8" />
-	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 	<title>Red Zenon</title>
 	<link rel="icon" type="image/png" href="assets/logo1.png" />
 	<link rel="stylesheet" href="css/style.css" />
@@ -391,6 +391,33 @@
 		#ageOverlay .subtitle { margin-top: 6px; color: #cfd6e6; font-size: 15px; }
 		#ageOverlay .note { margin-top: 10px; color: #a9b2c0; font-size: 13px; }
 		#ageOverlay .actions { margin-top: 14px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+		/* Mobile: ocupar toda la pantalla para el chat */
+		@media (max-width: 768px) {
+			body { align-items: stretch; }
+			.container { padding: 0; max-width: 100%; }
+			#chatRow { gap: 0; }
+			.card { border-radius: 0; }
+			#chatCard { 
+				display: flex; 
+				flex-direction: column; 
+				height: calc(var(--vh, 1vh) * 100);
+				max-height: calc(var(--vh, 1vh) * 100);
+			}
+			#chatCard .content { 
+				flex: 1; 
+				overflow: hidden; 
+				display: flex; 
+				gap: 12px; 
+				padding: 12px; 
+			}
+			#userListPanel { display: none !important; }
+			#shortcutsCard { display: none !important; }
+			.chat-wrapper { height: 100%; }
+			.messages { min-height: 0; }
+			.composer { gap: 12px; }
+			#messageInput { margin-right: 0; }
+		}
 	</style>
 	<link rel="manifest" href="/manifest.webmanifest">
 	<meta name="theme-color" content="#0a0b10">
@@ -614,6 +641,16 @@
 		if ('serviceWorker' in navigator) {
 			navigator.serviceWorker.register('/sw.js').catch(() => {});
 		}
+
+		// Ajuste de alto en móviles: usar --vh basado en window.innerHeight para
+		// evitar el recorte por las barras del navegador.
+		function updateViewportUnit() {
+			const vh = window.innerHeight * 0.01;
+			document.documentElement.style.setProperty('--vh', `${vh}px`);
+		}
+		updateViewportUnit();
+		window.addEventListener('resize', updateViewportUnit, { passive: true });
+		window.addEventListener('orientationchange', updateViewportUnit);
 		const loginCard = document.getElementById('loginCard');
 		const chatRow = document.getElementById('chatRow');
 		const chatCard = document.getElementById('chatCard');
