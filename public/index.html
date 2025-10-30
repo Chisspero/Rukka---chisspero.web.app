@@ -2873,7 +2873,6 @@
 						}
 					});
 					newKeys.forEach(userKey => {
-						// Notificar conversación nueva solo si realmente tiene algo no leído y reciente
 						notifyNewConversation(userKey);
 					});
 					const users = Array.from(combinedKeys).filter(u => {
