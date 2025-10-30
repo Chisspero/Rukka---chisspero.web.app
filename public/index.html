@@ -52,7 +52,7 @@
 			border-radius: 14px;
 			overflow: hidden;
 			box-shadow: 0 16px 40px var(--shadow);
-			position: relative; /* para overlays internos */
+			position: relative;
 		}
 		.header {
 			padding: 18px 20px;
@@ -70,7 +70,6 @@
 			vertical-align: middle; 
 			margin: 0 6px; 
 		}
-        /* Permitir copiar el nombre con un clic */
         #nameBadge { cursor: pointer; user-select: none; }
         #nameBadge.copied { border-color: rgba(156,134,255,0.6); box-shadow: 0 0 0 2px rgba(156,134,255,0.2) inset; }
         
@@ -101,11 +100,7 @@
 		.btn.primary { border-color: rgba(156,134,255,0.35); background: linear-gradient(180deg, #262341, #191a2a); color: #ede9ff; }
 		.btn.primary:hover { border-color: rgba(156,134,255,0.6); box-shadow: 0 8px 22px rgba(124,102,255,0.18); }
 		.error { color: var(--danger); font-size: 13px; min-height: 18px; }
-
-	/* Enfatizar el botón de ingresar sin afectar otros botones */
 	#loginBtn { padding: 12px 18px; font-size: 15px; }
-
-		/* Chat */
 		.chat-wrapper { height: 70vh; display: grid; grid-template-rows: 1fr auto auto; gap: 12px; }
 		.messages {
 			position: relative;
@@ -126,25 +121,20 @@
 			background-size: clamp(160px, 40%, 420px);
 			opacity: 0.04;
 		}
-		/* Mensajes estilo WhatsApp: mensajes propios a la derecha, del otro a la izquierda */
 		.msg { margin: 10px 0; display: flex; flex-direction: column; gap: 6px; max-width: 75%; }
 		.msg.from-user { align-self: flex-start; }
 		.msg.from-admin { align-self: flex-end; }
-		
 		.meta { color: var(--muted); font-size: 12px; display: flex; gap: 8px; align-items: center; }
 		.msg.from-admin .meta { flex-direction: row-reverse; }
 		.meta .role { padding: 2px 6px; border-radius: 999px; border: 1px solid var(--border); }
 		.meta .role.admin { color: var(--success); border-color: rgba(85,214,156,0.35); }
 		.meta .role.user { color: var(--primary); border-color: rgba(77,163,255,0.35); }
-		
 		.bubble { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: #11131a; box-shadow: 0 8px 18px rgba(0,0,0,0.18) inset; }
-		/* Mensajes del otro: izquierda con colita izquierda */
 		.msg.from-user .bubble { 
 			background: linear-gradient(180deg, #111625, #0f1220); 
 			border-color: #20243a; 
 			border-radius: 10px 10px 10px 2px;
 		}
-		/* Mensajes propios: derecha con colita derecha */
 		.msg.from-admin .bubble { 
 			background: linear-gradient(180deg, #0f1b17, #0d1513); 
 			border-color: #1f2f2a;
@@ -155,7 +145,6 @@
 		.composer .input { width: 100%; }
 		.composer { grid-template-columns: 1fr auto auto auto auto; }
 		.composer .btn.icon { width: 44px; display: inline-flex; align-items: center; justify-content: center; padding: 0; font-size: 18px; border-color: #23283d; }
-		/* achicar un poco el input para que no se pegue al micrófono */
 		#messageInput { margin-right: 6px; width: calc(100% - 20px); justify-self: start; }
 		.shortcuts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 		.panels-section { margin-top: 14px; }
@@ -223,8 +212,6 @@
 			font-size: 12px;
 			color: var(--muted);
 		}
-
-		/* Preview de imagen antes de enviar */
 		.image-preview {
 			background: linear-gradient(180deg, #121424, #0f111a);
 			border: 1px solid var(--border);
@@ -262,14 +249,11 @@
 		.recording .time { color: #ffb1b1; font-size: 13px; margin-left: auto; }
 		@keyframes blink { 0%, 50% { opacity: 1 } 50.01%, 100% { opacity: .35 } }
 		#userListPanel { border: 1px solid var(--border); border-radius: 12px; padding: 10px; background: linear-gradient(180deg, #10131c, #0f1118); }
-		/* Evitar que una lista larga de usuarios empuje el chat hacia arriba: hace scroll propio */
 		#userListPanel { max-height: 70vh; overflow: auto; display: flex; flex-direction: column; }
 		#userListPanel > div:first-child { color: #e6e9f3; }
 		#userList .btn { gap: 10px; display: flex; align-items: center; background: linear-gradient(180deg, #141726, #101320); border-color: #1f2234; }
 		#userList .btn:hover { border-color: #2b3050; box-shadow: 0 6px 16px rgba(0,0,0,0.25); }
 		.list-avatar { width: 18px; height: 18px; border-radius: 4px; object-fit: contain; filter: drop-shadow(0 0 4px rgba(255,190,11,0.25)); }
-
-		/* Dialogos modernos */
 		dialog { 
 			border: 1px solid var(--border); 
 			border-radius: 12px; 
@@ -283,8 +267,6 @@
 		.sound-dialog .dialog-title { font-weight:700; font-size:16px; }
 		.dialog-status { font-size:13px; color:#cfd6e6; margin-bottom:12px; }
 		.sound-dialog .dialog-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:10px; }
-
-		/* Input file estilizado */
 		#soundFileInput { 
 			width:100%; 
 			background: linear-gradient(180deg, #141726, #101320); 
@@ -304,8 +286,6 @@
 			transition: transform .12s ease, box-shadow .18s ease, border-color .18s ease;
 		}
 		#soundFileInput::file-selector-button:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(0,0,0,0.25); border-color: rgba(156,134,255,0.6); }
-
-		/* Slider de volumen */
 		#soundVolumeRange { 
 			width: 100%; 
 			height: 6px; 
@@ -317,8 +297,6 @@
 		}
 		#soundVolumeRange::-webkit-slider-thumb { appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #7a63f1; border: 2px solid #b2a6ff33; box-shadow: 0 2px 8px rgba(122,99,241,0.45); cursor: pointer; }
 		#soundVolumeRange::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: #7a63f1; border: 2px solid #b2a6ff33; box-shadow: 0 2px 8px rgba(122,99,241,0.45); cursor: pointer; }
-
-		/* Horario cerrado (04:00–10:00 Buenos Aires) */
 		body.closed-hours { padding-top: 60px; }
 		#closedBanner {
 			position: fixed;
@@ -328,7 +306,7 @@
 			border-bottom: 1px solid #b32b45;
 			box-shadow: 0 10px 24px rgba(179,43,69,0.25);
 			color: #ffd7de;
-			display: none; /* se muestra por JS en horario cerrado */
+			display: none;
 		}
 		#closedBanner .inner {
 			max-width: 1600px;
@@ -345,8 +323,6 @@
 			border-color: #b32b45;
 			color: #ffd7de;
 		}
-
-		/* Overlay de pantalla completa para aviso inicial */
 		#closedFullOverlay {
 			position: fixed; inset: 0; z-index: 10000; display: none;
 			background: linear-gradient(180deg, rgba(10,11,16,0.85), rgba(10,11,16,0.92));
@@ -416,7 +392,6 @@
 	<meta name="theme-color" content="#0a0b10">
 </head>
 <body>
-	<!-- Aviso global de horario cerrado -->
 	<div id="closedBanner" role="status" aria-live="polite">
 		<div class="inner">
 			<span style="font-size:18px">⏰</span>
@@ -428,8 +403,6 @@
 			<span class="badge" style="font-weight:700">CERRADO</span>
 		</div>
 	</div>
-
-	<!-- Overlay de pantalla completa (solo se muestra inicialmente en horario cerrado para usuarios) -->
 	<div id="closedFullOverlay" aria-modal="true" role="dialog">
 		<div class="cardy">
 			<div class="stamp">CERRADO</div>
@@ -502,7 +475,6 @@
 								</div>
 							</div>
 						</div>
-						<!-- Vista previa de audio -->
 						<div class="image-preview" id="audioPreview" style="display:none">
 							<audio id="audioPreviewPlayer" controls style="width:140px"></audio>
 							<div class="info">
@@ -534,7 +506,6 @@
 							<input type="file" id="pdfInput" accept="application/pdf" style="display:none" />
 						</div>
 					</div>
-					<!-- Overlay informativo de horario cerrado -->
 					<div id="closedOverlay" class="closed-overlay">
 						<div class="panel">
 							<div class="title">⏰ Fuera de horario</div>
@@ -580,8 +551,6 @@
 			</div>
 			</div>
 	</div>
-
-	<!-- Overlay de verificación de edad -->
 	<div id="ageOverlay" aria-modal="true" role="dialog">
 		<div class="cardy">
 			<div class="title">Verificación de edad</div>
@@ -596,8 +565,6 @@
 	<dialog id="imgDialog">
 		<img id="imgDialogImg" alt="imagen" loading="lazy" decoding="async" />
 	</dialog>
-
-	<!-- Configuración de sonido de notificaciones (movido fuera para mantener limpio el layout) -->
 	<dialog id="soundDialog">
 		<form method="dialog" style="min-width:280px;max-width:460px;padding:16px;" class="sound-dialog">
 			<div class="dialog-header">
@@ -640,8 +607,6 @@
 		const db = getDatabase(app);
 		const fs = getFirestore(app);
 		const functionsClient = getFunctions(app);
-
-		// Registrar Service Worker para habilitar PWA y Web Share Target
 		if ('serviceWorker' in navigator) {
 			navigator.serviceWorker.register('/sw.js').catch(() => {});
 		}
@@ -700,7 +665,6 @@
 		const pdfPreviewSize = document.getElementById('pdfPreviewSize');
 		const confirmPdfBtn = document.getElementById('confirmPdfBtn');
 		const cancelPdfBtn = document.getElementById('cancelPdfBtn');
-		// Preview de audio
 		const audioPreview = document.getElementById('audioPreview');
 		const audioPreviewPlayer = document.getElementById('audioPreviewPlayer');
 		const audioPreviewName = document.getElementById('audioPreviewName');
@@ -708,18 +672,14 @@
 		const cancelAudioBtn = document.getElementById('cancelAudioBtn');
 		const imgDialog = document.getElementById('imgDialog');
 		const imgDialogImg = document.getElementById('imgDialogImg');
-		// Avisos de horario
 		const closedBanner = document.getElementById('closedBanner');
 		const closedOverlay = document.getElementById('closedOverlay');
 		const closedFullOverlay = document.getElementById('closedFullOverlay');
 		const closedDismissBtn = document.getElementById('closedDismissBtn');
-		// Age gate
 		const ageOverlay = document.getElementById('ageOverlay');
 		const ageYesBtn = document.getElementById('ageYesBtn');
 		const ageNoBtn = document.getElementById('ageNoBtn');
 		const ageMsg = document.getElementById('ageMsg');
-
-		// Recepción de archivos compartidos desde el Service Worker (Web Share Target)
 		if ('serviceWorker' in navigator) {
 			navigator.serviceWorker.addEventListener('message', (event) => {
 				try {
