@@ -393,6 +393,24 @@
 		}
 		.closed-overlay .panel .title { font-size: 18px; font-weight: 800; color: #ffd7de; margin-bottom: 6px; }
 		.closed-overlay .panel .desc { font-size: 14px; color: #ffb1c0; }
+
+		/* Age gate overlay */
+		#ageOverlay {
+			position: fixed; inset: 0; z-index: 10001; display: none;
+			background: linear-gradient(180deg, rgba(10,11,16,0.85), rgba(10,11,16,0.92));
+			backdrop-filter: blur(2px);
+			align-items: center; justify-content: center; text-align: center;
+		}
+		#ageOverlay .cardy {
+			max-width: 720px; margin: 0 16px; padding: 22px 20px;
+			border-radius: 14px; border: 1px solid #2a2f45;
+			background: linear-gradient(180deg, #141726, #101320);
+			box-shadow: 0 24px 64px rgba(0,0,0,0.35);
+		}
+		#ageOverlay .title { font-size: 22px; font-weight: 800; color: #ede9ff; }
+		#ageOverlay .subtitle { margin-top: 6px; color: #cfd6e6; font-size: 15px; }
+		#ageOverlay .note { margin-top: 10px; color: #a9b2c0; font-size: 13px; }
+		#ageOverlay .actions { margin-top: 14px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
 	</style>
 	<link rel="manifest" href="/manifest.webmanifest">
 	<meta name="theme-color" content="#0a0b10">
@@ -562,6 +580,19 @@
 			</div>
 			</div>
 	</div>
+
+	<!-- Overlay de verificación de edad -->
+	<div id="ageOverlay" aria-modal="true" role="dialog">
+		<div class="cardy">
+			<div class="title">Verificación de edad</div>
+			<div class="subtitle">Para continuar, confirmá que sos mayor de 18 años.</div>
+			<div id="ageMsg" class="note"></div>
+			<div class="actions">
+				<button class="btn" id="ageNoBtn" type="button">No, soy menor</button>
+				<button class="btn primary" id="ageYesBtn" type="button">Sí, soy mayor de 18</button>
+			</div>
+		</div>
+	</div>
 	<dialog id="imgDialog">
 		<img id="imgDialogImg" alt="imagen" loading="lazy" decoding="async" />
 	</dialog>
@@ -682,6 +713,11 @@
 		const closedOverlay = document.getElementById('closedOverlay');
 		const closedFullOverlay = document.getElementById('closedFullOverlay');
 		const closedDismissBtn = document.getElementById('closedDismissBtn');
+		// Age gate
+		const ageOverlay = document.getElementById('ageOverlay');
+		const ageYesBtn = document.getElementById('ageYesBtn');
+		const ageNoBtn = document.getElementById('ageNoBtn');
+		const ageMsg = document.getElementById('ageMsg');
 
 		// Recepción de archivos compartidos desde el Service Worker (Web Share Target)
 		if ('serviceWorker' in navigator) {
@@ -701,6 +737,20 @@
 						}
 					}
 				} catch {}
+			});
+		}
+
+		// Eventos del age gate
+		if (ageYesBtn) {
+			ageYesBtn.addEventListener('click', () => {
+				try { localStorage.setItem('age18Confirmed', '1'); } catch {}
+				if (ageOverlay) ageOverlay.style.display = 'none';
+				document.body.style.overflow = '';
+			});
+		}
+		if (ageNoBtn) {
+			ageNoBtn.addEventListener('click', () => {
+				if (ageMsg) ageMsg.textContent = 'Debés ser mayor de 18 años para usar este servicio.';
 			});
 		}
 
@@ -803,6 +853,17 @@
 		const r = (currentUser?.role || '').toLowerCase();
 		return r === 'admin' || r === 'cajero';
 	}
+
+		function ensureAgeGate() {
+			try {
+				const ok = localStorage.getItem('age18Confirmed') === '1';
+				if (!ok) {
+					if (ageOverlay) ageOverlay.style.display = 'flex';
+					// opcional: bloquear scroll
+					document.body.style.overflow = 'hidden';
+				}
+			} catch {}
+		}
 
 	function updateClosedStateUI() {
 		const closed = isClosedHoursBuenosAires();
@@ -2970,6 +3031,8 @@
 		updateClosedStateUI();
 		setInterval(updateClosedStateUI, 60 * 1000);
 		setView(false);
+		// Mostrar verificación de edad si corresponde
+		ensureAgeGate();
 		if (closedDismissBtn) {
 			closedDismissBtn.addEventListener('click', () => {
 				try { sessionStorage.setItem('closedOverlayDismissed', '1'); } catch {}
