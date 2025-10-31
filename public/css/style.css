@@ -50,11 +50,6 @@ body.halloween {
 	box-shadow: 0 0 32px #ff7518aa;
 	border-color: #ff7518;
 }
-/* --- END HALLOWEEN MODE --- */
-/* AdSense Top Bar (arriba de la caja de texto) */
-/* AdSense Top Bar (fixed at top) */
-/* AdSense Top Bar (fixed, minimal width) */
-/* AdSense Top Bar (fixed, recommended width) */
 #adsense-top-bar {
 	position: fixed;
 	top: 0;
