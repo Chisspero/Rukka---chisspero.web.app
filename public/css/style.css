@@ -1,11 +1,15 @@
 /* AdSense Bottom Bar */
 /* AdSense Top Bar (arriba de la caja de texto) */
 /* AdSense Top Bar (fixed at top) */
+/* AdSense Top Bar (fixed, minimal width) */
+/* AdSense Top Bar (fixed, recommended width) */
 #adsense-top-bar {
 	position: fixed;
 	top: 0;
-	left: 0;
-	width: 100vw;
+	left: 50%;
+	transform: translateX(-50%);
+	width: 468px;
+	max-width: 100vw;
 	z-index: 9999;
 	display: flex;
 	justify-content: center;
@@ -13,6 +17,7 @@
 	background: transparent;
 	margin-bottom: 0;
 	box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+	padding: 0;
 }
 .adsense-inner {
 	width: 100%;
@@ -29,11 +34,13 @@
 }
 @media (max-width: 600px) {
 	#adsense-top-bar {
-		top: 0;
-		left: 0;
-		width: 100vw;
+		left: 50%;
+		transform: translateX(-50%);
+		width: 320px;
+		max-width: 100vw;
 		margin-bottom: 0;
 		box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+		padding: 0;
 	}
 	.adsense-inner {
 		max-width: 100vw;
@@ -49,19 +56,6 @@
 	max-width: 400px;
 	margin: 0 auto;
 	background: transparent;
-	.messages::before {
-		content: '';
-		position: fixed;
-		top: 0;
-		left: 0;
-		width: 100vw;
-		height: 100vh;
-		pointer-events: none;
-		background: url('assets/logo.png') no-repeat center center;
-		background-size: clamp(160px, 40%, 420px);
-		opacity: 0.04;
-		z-index: 0;
-	}
 }
 .adsbygoogle {
 	width: 100% !important;

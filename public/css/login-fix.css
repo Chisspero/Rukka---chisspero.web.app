@@ -1,0 +1,9 @@
+/* Mueve el login para abajo según la altura del anuncio */
+#loginCard {
+    margin-top: 90px;
+}
+@media (max-width: 600px) {
+    #loginCard {
+        margin-top: 60px;
+    }
+}
