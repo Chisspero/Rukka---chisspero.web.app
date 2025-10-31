@@ -1,6 +1,9 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+	<!-- Funding Choices Consent Management for AdSense -->
+	<script async src="https://fundingchoicesmessages.google.com/i/pub-6617508510919967?ers=1"></script>
+	<script>(function() {function signalGooglefcPresent() {if (!window.frames['googlefcPresent']) {if (document.body) {const iframe = document.createElement('iframe'); iframe.style = 'width: 0; height: 0; border: none; z-index: -1000; left: -1000px; top: -1000px;'; iframe.style.display = 'none'; iframe.name = 'googlefcPresent'; document.body.appendChild(iframe);} else {setTimeout(signalGooglefcPresent, 0);}}}signalGooglefcPresent();})();</script>
 	<!-- Google AdSense -->
 	<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6617508510919967" crossorigin="anonymous"></script>
 	<meta name="google-adsense-account" content="ca-pub-6617508510919967">
@@ -441,17 +444,7 @@
 		}
 	</script>
 	<!-- AdSense Responsive Ad Unit -->
-	<div style="width:100vw;max-width:100vw;display:flex;justify-content:center;margin:18px 0;box-sizing:border-box;">
-		<div style="max-width:728px;width:100%;margin:0 auto;">
-			<ins class="adsbygoogle"
-				style="display:block;width:100%;"
-				data-ad-client="ca-pub-6617508510919967"
-				data-ad-slot="1234567890"
-				data-ad-format="auto"
-				data-full-width-responsive="true"></ins>
-			<script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
-		</div>
-	</div>
+
 	<div id="closedBanner" role="status" aria-live="polite">
 		<div class="inner">
 			<span style="font-size:18px">⏰</span>
@@ -1369,6 +1362,7 @@
 				const imageVal = msg.i || msg.imageDataUrl || msg.imageUrl;
 				const audioVal = msg.a || msg.audioDataUrl;
 				const pdfVal = msg.p || msg.pdfDataUrl || msg.pdfUrl;
+				const typeVal = msg.type || msg.ty || (imageVal ? 'i' : audioVal ? 'a' : pdfVal ? 'p' : textVal ? 't' : 't');
 				const isMyMessage = (currentUser.role === 'admin' && roleVal === 'admin') || 
 									(currentUser.role === 'user' && roleVal !== 'admin');
 				wrap.className = 'msg ' + (isMyMessage ? 'from-admin' : 'from-user');
@@ -3110,4 +3104,16 @@
 		}
 	</script>
 </body>
+	<!-- AdSense Ad Block Above Composer -->
+	<div id="adsense-top-bar">
+		<div class="adsense-inner">
+			<ins class="adsbygoogle"
+				style="display:block;width:100%;height:90px;"
+				data-ad-client="ca-pub-6617508510919967"
+				data-ad-slot="1234567890"
+				data-ad-format="auto"
+				data-full-width-responsive="true"></ins>
+			<script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+		</div>
+	</div>
 </html>
