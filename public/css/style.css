@@ -1,4 +1,56 @@
 /* AdSense Bottom Bar */
+/* --- HALLOWEEN MODE DECORATION --- */
+body.halloween {
+	background: linear-gradient(135deg, #1a0a1a 0%, #2c1a2c 100%), url('https://i.imgur.com/2yYQbQb.png') repeat;
+	color: #ffb347;
+}
+.halloween .card, .halloween .chat-wrapper, .halloween #loginCard {
+	background: linear-gradient(135deg, #2c1a2c 0%, #3a1a3a 100%);
+	border-color: #ff7518;
+	box-shadow: 0 0 32px 0 #ff7518aa;
+}
+.halloween .header, .halloween .panels-section, .halloween .cajero-section {
+	background: #2c1a2c;
+	color: #ffb347;
+}
+.halloween .btn, .halloween .btn.primary {
+	background: linear-gradient(90deg, #ff7518 0%, #ffb347 100%);
+	color: #2c1a2c;
+	border-color: #ff7518;
+}
+.halloween .btn:hover {
+	box-shadow: 0 0 12px #ff7518;
+}
+.halloween .badge, .halloween .title {
+	color: #ff7518 !important;
+}
+.halloween #adsense-top-bar {
+	box-shadow: 0 0 24px #ff7518aa;
+	border-bottom: 2px solid #ff7518;
+}
+.halloween #cookieNotice {
+	background: #2c1a2c;
+	color: #ffb347;
+	border-top: 2px solid #ff7518;
+}
+.halloween .reaction-heart {
+	color: #ff7518;
+	filter: drop-shadow(0 0 4px #ff7518);
+}
+.halloween .bubble {
+	background: #2c1a2c;
+	border-color: #ff7518;
+}
+.halloween .input {
+	background: #1a0a1a;
+	color: #ffb347;
+	border-color: #ff7518;
+}
+.halloween #imgDialog img {
+	box-shadow: 0 0 32px #ff7518aa;
+	border-color: #ff7518;
+}
+/* --- END HALLOWEEN MODE --- */
 /* AdSense Top Bar (arriba de la caja de texto) */
 /* AdSense Top Bar (fixed at top) */
 /* AdSense Top Bar (fixed, minimal width) */
