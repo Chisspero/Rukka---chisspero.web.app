@@ -1456,10 +1456,8 @@
 					messagesEl.insertBefore(wrap, node.nextElementSibling);
 					inserted = (node === messagesEl.lastElementChild);
 				}
-				// Auto-scroll sólo si el mensaje es el más nuevo
-				if (inserted) {
-					messagesEl.scrollTop = messagesEl.scrollHeight;
-				}
+				// Auto-scroll siempre al final al agregar mensajes
+				messagesEl.scrollTop = messagesEl.scrollHeight;
 			}
 
 			function appendMessageOnce(uniqueId, msg, userKey) {
@@ -1608,7 +1606,7 @@
 			const convRef = ref(db, 'chat/conversaciones/' + userKey);
 			subscribeFirestoreHistory(userKey);
 
-			const INITIAL_MESSAGE_LIMIT = 50;
+			const INITIAL_MESSAGE_LIMIT = 12;
 			const convQuery = query(convRef, orderByChild('ts'), limitToLast(INITIAL_MESSAGE_LIMIT));
 			const childAddedHandler = (snap) => {
 				const val = snap.val() || {};
