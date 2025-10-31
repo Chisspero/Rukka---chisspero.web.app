@@ -3,6 +3,7 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const logger = require('firebase-functions/logger');
 const { initializeApp } = require('firebase-admin/app');
 const admin = require('firebase-admin');
+const { doc, setDoc, deleteField } = require('firebase-admin/firestore');
 
 initializeApp();
 
@@ -308,3 +309,36 @@ exports.dailyCleanup = onSchedule(
     }
   }
 );
+
+function subscribeAliases() {
+    const aliasesRef = ref(db, 'chat/aliases');
+    onValue(aliasesRef, (snap) => {
+        userAliases = snap.val() || {};
+        try { localStorage.setItem('aliasesCache', JSON.stringify(userAliases)); } catch {}
+        renderUserList();
+    });
+}
+
+function subscribeAdminNotes() {
+    const notesRef = doc(fs, 'adminState', 'notes');
+    unsubscribeAdminNotes && unsubscribeAdminNotes();
+    unsubscribeAdminNotes = onSnapshot(notesRef, (snap) => {
+        adminNotes = snap.exists() ? snap.data() : {};
+        try { localStorage.setItem('adminNotesCache', JSON.stringify(adminNotes)); } catch {}
+        renderUserList();
+    });
+}
+
+async function markChatRead(userKey) {
+    try {
+        if (!userKey || currentUser.role !== 'admin') return;
+        const ts = nowMs();
+        adminReadState[userKey] = ts;
+        try { localStorage.setItem('adminReadsCache', JSON.stringify(adminReadState)); } catch {}
+        try { delete unreadCounts[userKey]; } catch {}
+        renderUserList();
+        await setDoc(doc(fs, 'adminState', 'reads'), { [userKey]: ts }, { merge: true });
+    } catch (err) {
+        console.warn('No se pudo marcar como leído', err);
+    }
+}
