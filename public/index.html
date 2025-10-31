@@ -1195,8 +1195,13 @@
 			// No notificar si ya está leído o si es viejo
 			const lastTs = getLastMessageTs(userKey);
 			const readTs = adminReadState[userKey] || 0;
+			// Solo notificar si el último mensaje es realmente más nuevo que el último leído y no es viejo
+			if (!lastTs || lastTs <= readTs) return;
+			// Si el chat se abre y el último mensaje no cambió, no notificar
+			if (lastMessageTimestamps[userKey] && lastMessageTimestamps[userKey] === lastTs) return;
 			const age = nowMs() - (lastTs || 0);
-			if (!lastTs || lastTs <= readTs || age > NEW_MESSAGE_MAX_AGE_MS) return;
+			if (age > NEW_MESSAGE_MAX_AGE_MS) return;
+			lastMessageTimestamps[userKey] = lastTs;
 			const displayName = getDisplayName(userKey) || userKey;
 			const body = getLatestMessageSummary(userKey) || 'Nuevo chat disponible';
 			playNotificationSound();
@@ -1231,16 +1236,17 @@
 		// Detectar mensajes nuevos y notificar (solo para admin)
 		function handleNewMessage(userKey, message) {
 			if (currentUser.role !== 'admin') return;
-			if (!message || message.role === 'admin') return;
-			const lastTS = lastMessageTimestamps[userKey] || 0;
-			const msgTS = typeof message.ts === 'number' ? message.ts : (typeof message.timestamp === 'number' ? message.timestamp : nowMs());
+			if (!message) return;
+			// Adaptar claves cortas
+			const roleVal = message.r || message.role;
+			if (roleVal === 'admin') return;
+			const tsVal = message.x || message.ts || message.timestamp || nowMs();
 			const readTs = adminReadState[userKey] || 0;
-			// Solo notificar si es un mensaje nuevo (posterior al último conocido)
-			if (msgTS > lastTS) {
-				lastMessageTimestamps[userKey] = msgTS;
-				// Si el mensaje es posterior a lo último leído y realmente nuevo (menos de NEW_MESSAGE_MAX_AGE_MS)
-				const age = nowMs() - msgTS;
-				if (msgTS > readTs && age <= NEW_MESSAGE_MAX_AGE_MS) {
+			// Siempre notificar si el mensaje es realmente nuevo (mayor al último leído)
+			if (tsVal > readTs) {
+				// Evitar duplicados: solo si no fue notificado antes
+				if (!lastMessageTimestamps[userKey] || tsVal > lastMessageTimestamps[userKey]) {
+					lastMessageTimestamps[userKey] = tsVal;
 					playNotificationSound();
 					if (userKey !== selectedUserKey) {
 						incrementUnread(userKey);
@@ -1248,23 +1254,23 @@
 					// Mostrar notificación Push
 					const userName = getDisplayName(userKey) || userKey;
 					let notifBody = '';
-					if (message.text) {
-						notifBody = message.text.length > 50 ? message.text.substring(0, 50) + '...' : message.text;
-					} else if (message.imageDataUrl) {
+					const textVal = message.t || message.text;
+					const imageVal = message.i || message.imageDataUrl || message.imageUrl;
+					const pdfVal = message.p || message.pdfDataUrl || message.pdfUrl;
+					const audioVal = message.a || message.audioDataUrl;
+					const nameVal = message.n || message.name;
+					if (textVal) {
+						notifBody = textVal.length > 50 ? textVal.substring(0, 50) + '...' : textVal;
+					} else if (imageVal) {
 						notifBody = '📷 Imagen';
-					} else if (message.pdfDataUrl) {
-						notifBody = message.name ? `📄 ${message.name}` : '📄 PDF';
-					} else if (message.audioDataUrl) {
+					} else if (pdfVal) {
+						notifBody = nameVal ? `📄 ${nameVal}` : '📄 PDF';
+					} else if (audioVal) {
 						notifBody = '🎤 Audio';
 					} else {
 						notifBody = 'Mensaje nuevo';
 					}
 					showNotification(`💬 ${userName}`, notifBody);
-				} else if (userKey !== selectedUserKey) {
-					if (!unreadCounts[userKey]) {
-						unreadCounts[userKey] = 1;
-						renderUserList();
-					}
 				}
 			}
 		}
