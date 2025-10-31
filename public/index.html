@@ -1360,17 +1360,13 @@
 
 				function appendMessage(id, msg, userKey) {
 				const wrap = document.createElement('div');
-				// Vista dinámica: el mensaje es "mío" si soy admin y el rol es admin, o si soy usuario y el rol es user
-				// Adaptar claves cortas
 				const roleVal = msg.r || msg.role;
 				const senderVal = msg.s || msg.sender || 'Anónimo';
 				const tsVal = msg.x || msg.ts;
-				const
 				const textVal = msg.t || msg.text;
 				const imageVal = msg.i || msg.imageDataUrl || msg.imageUrl;
 				const audioVal = msg.a || msg.audioDataUrl;
 				const pdfVal = msg.p || msg.pdfDataUrl || msg.pdfUrl;
-
 				const isMyMessage = (currentUser.role === 'admin' && roleVal === 'admin') || 
 									(currentUser.role === 'user' && roleVal !== 'admin');
 				wrap.className = 'msg ' + (isMyMessage ? 'from-admin' : 'from-user');
