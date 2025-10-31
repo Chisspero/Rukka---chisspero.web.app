@@ -573,7 +573,7 @@
 					<div class="cajero-section">
 						<div class="cajero-title">Cajero</div>
 						<div class="cajero">
-							<div class="danger-card" id="btnCajeroClear" title="Borrar todos los mensajes (texto, imágenes, audios) conservando los chats">BORRAR</div>
+
 							<div class="panel-card" id="btnCajeroSound" title="Elegir sonido de notificaciones personalizado">NOTIFI.</div>
 							<div class="panel-card" id="btnCajeroSupport" title="En caso de tener un problema, contactarse al siguiente número de whatsapp: +54 1164147048">SOPORTE</div>
 						</div>
@@ -984,27 +984,7 @@
 		updateActiveChatHeader();
 		updateClosedStateUI();
 	}
-	async function runCajeroClear() {
-		if (currentUser.role !== 'admin') return { deletedRTDB: 0, deletedFS: 0 };
-		try {
-			const callable = httpsCallable(functionsClient, 'adminClearChats');
-			const response = await callable({ token: ADMIN_CLEAR_TOKEN });
-			const payload = response?.data || {};
-			if (selectedUserKey) {
-				clearChat();
-				loadChat(selectedUserKey);
-			} else if (typeof renderUserList === 'function') {
-				renderUserList();
-			}
-			return {
-				deletedRTDB: Number(payload.deletedRTDB || 0),
-				deletedFS: Number(payload.deletedFS || 0)
-			};
-		} catch (err) {
-			console.error('Error en Cajero (borrado forzado):', err);
-			throw err;
-		}
-	}
+
 
 		// ========== SISTEMA DE NOTIFICACIONES ==========
 		function getAudioContext() {
@@ -1492,7 +1472,7 @@
 				appendMessage(uniqueId, msg, userKey);
 			}
 
-			// Borrar un mensaje enviado por el admin (solo sus propios mensajes)
+
 
 			// Toggle de reacción (corazón) y actualización en BD y UI
 			function updateReactionDom(uniqueId, reacted) {
@@ -2691,32 +2671,7 @@
 				});
 			}
 
-			// Cajero: borrar mensajes a demanda (solo admin)
-			if (btnCajeroClear) {
-				btnCajeroClear.addEventListener('click', async () => {
-					if (currentUser.role !== 'admin') return;
-					const sure = confirm('¿Seguro que vas a borrar TODOS los mensajes? (texto, imágenes y audios)');
-					if (!sure) return;
-					// Confirmación adicional
-					const sure2 = confirm('Esta acción es INMEDIATA y no se puede REVERTIR');
-					if (!sure2) return;
-					const prevText = btnCajeroClear.textContent;
-					btnCajeroClear.textContent = 'Borrando...';
-					btnCajeroClear.style.opacity = '0.7';
-					btnCajeroClear.style.pointerEvents = 'none';
-					try {
-						const { deletedRTDB, deletedFS } = await runCajeroClear();
-						const total = (deletedRTDB || 0) + (deletedFS || 0);
-						alert(`Se borraron ${total} mensajes (BS.T: ${deletedRTDB || 0}, Base de datos: ${deletedFS || 0})`);
-					} catch (err) {
-						alert('Hubo un problema al borrar los mensajes');
-					} finally {
-						btnCajeroClear.textContent = prevText;
-						btnCajeroClear.style.opacity = '';
-						btnCajeroClear.style.pointerEvents = '';
-					}
-				});
-			}
+
 
 			function subscribeFirestoreHistory(userKey) {
 				if (unsubscribeHistoryFS) { try { unsubscribeHistoryFS(); } catch {} unsubscribeHistoryFS = null; }
@@ -2993,7 +2948,7 @@
 					contextMenuEl.style.minWidth = '140px';
 					contextMenuEl.innerHTML = `
 						<button style="all:unset;display:block;width:100%;padding:10px 16px;cursor:pointer;color:#fff;font-size:15px;" id="renameBtn">Cambiar nombre</button>
-						<button style="all:unset;display:block;width:100%;padding:10px 16px;cursor:pointer;color:#ff5c5c;font-size:15px;" id="deleteBtn">Borrar</button>`;
+						`;
 					document.body.appendChild(contextMenuEl);
 					contextMenuEl.querySelector('#renameBtn').onclick = () => {
 						closeContextMenu();
@@ -3003,12 +2958,7 @@
 							renameUserChat(user, nuevo);
 						}
 					};
-					contextMenuEl.querySelector('#deleteBtn').onclick = () => {
-						closeContextMenu();
-						if (confirm('¿Seguro que deseas borrar el chat de "' + user + '"? Esta acción no se puede deshacer')) {
-							deleteUserChat(user);
-						}
-					};
+
 				}
 				document.addEventListener('click', closeContextMenu);
 					document.addEventListener('contextmenu', (e) => {
@@ -3035,26 +2985,7 @@
 							updateActiveChatHeader();
 						}
 					}
-					async function deleteUserChat(userKey) {
-						try {
-							await remove(ref(db, 'chat/conversaciones/' + userKey));
-							await remove(ref(db, 'chat/aliases/' + (userKey || '').toLowerCase()));
-						} catch (err) {
-							console.warn('No se pudo borrar el chat en Realtime:', err);
-						}
-						try {
-							await deleteDoc(doc(fs, 'conversaciones', userKey));
-						} catch (err) {
-							console.warn('No se pudo borrar metadata en base de datos:', err);
-						}
-						delete conversationMeta[userKey];
-						renderUserList();
-						if (selectedUserKey === userKey) {
-							selectedUserKey = null;
-							clearChat();
-							updateActiveChatHeader();
-						}
-					}
+
 			loginBtn.addEventListener('click', async () => {
 				const user = (usernameEl.value || '').trim();
 				const pass = (passwordEl.value || '').trim();
