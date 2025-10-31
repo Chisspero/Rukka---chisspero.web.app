@@ -4,6 +4,57 @@ body.halloween {
 	background: linear-gradient(135deg, #1a0a1a 0%, #2c1a2c 100%), url('https://i.imgur.com/2yYQbQb.png') repeat;
 	color: #ffb347;
 }
+.low-resource {
+	background: #181818 !important;
+	color: #e0e0e0 !important;
+}
+.low-resource .card, .low-resource .chat-wrapper, .low-resource #loginCard {
+	background: #222 !important;
+	border-color: #444 !important;
+	box-shadow: none !important;
+}
+.low-resource .header, .low-resource .panels-section, .low-resource .cajero-section {
+	background: #222 !important;
+	color: #e0e0e0 !important;
+}
+.low-resource .btn, .low-resource .btn.primary {
+	background: #333 !important;
+	color: #e0e0e0 !important;
+	border-color: #444 !important;
+	box-shadow: none !important;
+}
+.low-resource .btn:hover {
+	box-shadow: none !important;
+}
+.low-resource .badge, .low-resource .title {
+	color: #e0e0e0 !important;
+}
+.low-resource #adsense-top-bar {
+	box-shadow: none !important;
+	border-bottom: 1px solid #444 !important;
+}
+.low-resource #cookieNotice {
+	background: #222 !important;
+	color: #e0e0e0 !important;
+	border-top: 1px solid #444 !important;
+}
+.low-resource .reaction-heart {
+	color: #e0e0e0 !important;
+	filter: none !important;
+}
+.low-resource .bubble {
+	background: #222 !important;
+	border-color: #444 !important;
+}
+.low-resource .input {
+	background: #181818 !important;
+	color: #e0e0e0 !important;
+	border-color: #444 !important;
+}
+.low-resource #imgDialog img {
+	box-shadow: none !important;
+	border-color: #444 !important;
+}
 .halloween .card, .halloween .chat-wrapper, .halloween #loginCard {
 	background: linear-gradient(135deg, #2c1a2c 0%, #3a1a3a 100%);
 	border-color: #ff7518;
