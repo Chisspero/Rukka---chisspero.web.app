@@ -1,6 +1,9 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+	<!-- Google AdSense -->
+	<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6617508510919967" crossorigin="anonymous"></script>
+	<meta name="google-adsense-account" content="ca-pub-6617508510919967">
 	<meta charset="UTF-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 	<title>Red Zenon</title>
@@ -423,6 +426,30 @@
 	<meta name="theme-color" content="#0a0b10">
 </head>
 <body>
+	<!-- Aviso de cookies/privacidad para AdSense -->
+	<div id="cookieNotice" style="position:fixed;bottom:0;left:0;width:100%;background:#222;color:#fff;padding:12px 18px;font-size:15px;z-index:9999;display:none;align-items:center;justify-content:center;gap:12px;">
+		Este sitio utiliza cookies y tecnologías de terceros (Google AdSense) para mostrar publicidad relevante y mejorar tu experiencia. <button id="acceptCookies" style="margin-left:12px;padding:6px 16px;border-radius:6px;border:none;background:#9c86ff;color:#fff;cursor:pointer;">Aceptar</button>
+	</div>
+	<script>
+		// Mostrar aviso solo si no fue aceptado
+		if (!localStorage.getItem('adsenseCookiesAccepted')) {
+			document.getElementById('cookieNotice').style.display = 'flex';
+			document.getElementById('acceptCookies').onclick = function() {
+				localStorage.setItem('adsenseCookiesAccepted', '1');
+				document.getElementById('cookieNotice').style.display = 'none';
+			};
+		}
+	</script>
+	<!-- AdSense Responsive Ad Unit -->
+	<div style="width:100%;display:flex;justify-content:center;margin:18px 0;">
+		<ins class="adsbygoogle"
+			style="display:block"
+			data-ad-client="ca-pub-6617508510919967"
+			data-ad-slot="1234567890"
+			data-ad-format="auto"
+			data-full-width-responsive="true"></ins>
+		<script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+	</div>
 	<div id="closedBanner" role="status" aria-live="polite">
 		<div class="inner">
 			<span style="font-size:18px">⏰</span>
@@ -641,9 +668,6 @@
 		if ('serviceWorker' in navigator) {
 			navigator.serviceWorker.register('/sw.js').catch(() => {});
 		}
-
-		// Ajuste de alto en móviles: usar --vh basado en window.innerHeight para
-		// evitar el recorte por las barras del navegador.
 		function updateViewportUnit() {
 			const vh = window.innerHeight * 0.01;
 			document.documentElement.style.setProperty('--vh', `${vh}px`);
@@ -788,7 +812,6 @@
 	let selectedUserKey = null;
 	let chatListener = null;
 	let conversations = {};
-	let userAliases = {};
 	let conversationMeta = {};
 	let unsubscribeAliases = null;
 	let unsubscribeConversationsMeta = null;
@@ -813,6 +836,21 @@
 	let unsubscribeAdminReads = null;
 	let adminNotes = {};
 	let unsubscribeAdminNotes = null;
+	let userAliases = {};
+
+	// Cargar cache local si existe
+	try {
+		const rawAliases = localStorage.getItem('aliasesCache');
+		if (rawAliases) userAliases = JSON.parse(rawAliases);
+	} catch {}
+	try {
+		const rawNotes = localStorage.getItem('adminNotesCache');
+		if (rawNotes) adminNotes = JSON.parse(rawNotes);
+	} catch {}
+	try {
+		const rawReads = localStorage.getItem('adminReadsCache');
+		if (rawReads) adminReadState = JSON.parse(rawReads);
+	} catch {}
 	let messageIndex = new Map();
 
 	onValue(ref(db, '.info/serverTimeOffset'), (snap) => {
@@ -1205,6 +1243,7 @@
 				if (!userKey || currentUser.role !== 'admin') return;
 				const ts = nowMs();
 				adminReadState[userKey] = ts;
+				try { localStorage.setItem('adminReadsCache', JSON.stringify(adminReadState)); } catch {}
 				try { delete unreadCounts[userKey]; } catch {}
 				renderUserList();
 				await setDoc(doc(fs, 'adminState', 'reads'), { [userKey]: ts }, { merge: true });
@@ -1326,8 +1365,7 @@
 				const roleVal = msg.r || msg.role;
 				const senderVal = msg.s || msg.sender || 'Anónimo';
 				const tsVal = msg.x || msg.ts;
-				const typeVal = msg.y || msg.type;
-				const nameVal = msg.n || msg.name;
+				const
 				const textVal = msg.t || msg.text;
 				const imageVal = msg.i || msg.imageDataUrl || msg.imageUrl;
 				const audioVal = msg.a || msg.audioDataUrl;
@@ -1603,26 +1641,48 @@
 				return;
 			}
 
-			const convRef = ref(db, 'chat/conversaciones/' + userKey);
-			subscribeFirestoreHistory(userKey);
-
-			const INITIAL_MESSAGE_LIMIT = 12;
-			const convQuery = query(convRef, orderByChild('ts'), limitToLast(INITIAL_MESSAGE_LIMIT));
-			const childAddedHandler = (snap) => {
-				const val = snap.val() || {};
-				if (!val.ts && val.timestamp) val.ts = val.timestamp;
-				appendMessageOnce(snap.key, val, userKey);
-				handleNewMessage(userKey, val);
-			};
-			onChildAdded(convQuery, childAddedHandler);
-			chatListener = { ref: convQuery, callback: childAddedHandler };
-
-			// Reflejar cambios en tiempo real (reacciones, URL PDF) sin recargar
-			onChildChanged(convQuery, (snap) => {
-				const val = snap.val() || {};
-				if (!val.ts && val.timestamp) val.ts = val.timestamp;
-				handleChildChanged(snap.key, val, userKey);
-			});
+			// Intentar cargar los últimos 15 mensajes desde cache local
+			let cached = [];
+			try {
+				const raw = localStorage.getItem('chatCache_' + userKey);
+				if (raw) {
+					cached = JSON.parse(raw);
+				}
+			} catch {}
+			if (Array.isArray(cached) && cached.length > 0) {
+				cached.forEach(({ id, msg }) => {
+					appendMessageOnce(id, msg, userKey);
+				});
+				updateActiveChatHeader();
+			} else {
+				// Si no hay cache, cargar desde RTDB
+				const convRef = ref(db, 'chat/conversaciones/' + userKey);
+				subscribeFirestoreHistory(userKey);
+				const INITIAL_MESSAGE_LIMIT = 15;
+				const convQuery = query(convRef, orderByChild('ts'), limitToLast(INITIAL_MESSAGE_LIMIT));
+				const tempMsgs = [];
+				const childAddedHandler = (snap) => {
+					const val = snap.val() || {};
+					if (!val.ts && val.timestamp) val.ts = val.timestamp;
+					appendMessageOnce(snap.key, val, userKey);
+					handleNewMessage(userKey, val);
+					tempMsgs.push({ id: snap.key, msg: val });
+				};
+				onChildAdded(convQuery, childAddedHandler);
+				chatListener = { ref: convQuery, callback: childAddedHandler };
+				// Guardar en cache al terminar de cargar
+				setTimeout(() => {
+					try {
+						localStorage.setItem('chatCache_' + userKey, JSON.stringify(tempMsgs.slice(-15)));
+					} catch {}
+				}, 1000);
+				// Reflejar cambios en tiempo real (reacciones, URL PDF) sin recargar
+				onChildChanged(convQuery, (snap) => {
+					const val = snap.val() || {};
+					if (!val.ts && val.timestamp) val.ts = val.timestamp;
+					handleChildChanged(snap.key, val, userKey);
+				});
+			}
 
 			const messagesEl = document.getElementById('messages');
 			let isLoadingOldMessages = false;
