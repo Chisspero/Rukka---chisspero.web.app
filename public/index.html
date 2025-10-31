@@ -1377,29 +1377,6 @@
 				if (shouldShowSenderName && name) meta.appendChild(name);
 				meta.appendChild(role);
 				meta.appendChild(time);
-				if (currentUser.role === 'admin' && roleVal === 'admin' && id && userKey) {
-					const delBtn = document.createElement('button');
-					delBtn.type = 'button';
-					delBtn.className = 'btn';
-					delBtn.textContent = 'Eliminar';
-					delBtn.style.marginLeft = 'auto';
-					delBtn.style.padding = '4px 8px';
-					delBtn.style.fontSize = '12px';
-					delBtn.style.borderColor = '#2b3050';
-					delBtn.title = 'Eliminar este mensaje (solo los tuyos)';
-					delBtn.addEventListener('click', async (e) => {
-						e.preventDefault();
-						e.stopPropagation();
-						if (!confirm('¿Eliminar este mensaje?')) return;
-						try {
-							await deleteAdminMessage(id);
-							try { wrap.remove(); } catch {}
-						} catch (err) {
-							alert('No se pudo eliminar el mensaje');
-						}
-					});
-					meta.appendChild(delBtn);
-				}
 				wrap.appendChild(meta);
 				if (typeVal === 'i' && imageVal) {
 					const imgWrap = document.createElement('div');
@@ -1516,45 +1493,6 @@
 			}
 
 			// Borrar un mensaje enviado por el admin (solo sus propios mensajes)
-			async function deleteAdminMessage(uniqueId) {
-				try {
-					if (!uniqueId) return;
-					if (currentUser.role !== 'admin') return; // doble chequeo en cliente
-					const info = messageIndex.get(uniqueId);
-					if (!info) return;
-					const { msg, userKey } = info;
-					if (!msg || msg.role !== 'admin') return; // solo borrar mensajes del admin
-
-					// 1) RTDB: borrar el mensaje en la conversación
-					try {
-						await remove(ref(db, `chat/conversaciones/${userKey}/${uniqueId}`));
-					} catch (err) {
-						console.warn('No se pudo borrar en Realtime DB (puede ser histórico):', err);
-					}
-
-					// 2) Firestore: borrar cualquier doc archivado que corresponda
-					try {
-						const colRef = collection(fs, 'mensajes');
-						// buscar por rtdbKey + userKeyNormalized para precisión
-						const q = fsQuery(colRef, where('rtdbKey', '==', uniqueId), where('userKeyNormalized', '==', (userKey || '').toLowerCase()));
-						const snap = await getDocs(q);
-						if (!snap.empty) {
-							const batch = writeBatch(fs);
-							snap.forEach(d => batch.delete(d.ref));
-							await batch.commit();
-						}
-					} catch (err) {
-						console.warn('No se pudo borrar en base de datos (historial):', err);
-					}
-
-					// Actualizar índices locales y UI
-					try { renderedMessageIds.delete(uniqueId); } catch {}
-					try { messageIndex.delete(uniqueId); } catch {}
-				} catch (err) {
-					console.error('Error al borrar el mensaje:', err);
-					throw err;
-				}
-			}
 
 			// Toggle de reacción (corazón) y actualización en BD y UI
 			function updateReactionDom(uniqueId, reacted) {
