@@ -163,60 +163,35 @@ async function trimConversation(rtdb, db, userKey, cutoffTs) {
 
 exports.trimRealtimeConversations = onSchedule(
   {
-    // Reducido de cada 10 minutos a 1 vez por hora para disminuir invocaciones (y costo)
-    schedule: '0 * * * *',
+    schedule: '0 4 * * *',
     timeZone: 'America/Argentina/Buenos_Aires',
-    retryCount: 0,
-    maxInstances: 1
+    maxInstances: 1,
+    retryCount: 0
   },
   async () => {
     const rtdb = admin.database();
     const db = admin.firestore();
-    const cutoffTs = Date.now() - TRIM_RETENTION_MS;
-
-    const userKeys = new Set();
 
     try {
-      const metaSnap = await db.collection('conversaciones').get();
-      metaSnap.forEach(doc => userKeys.add(doc.id));
+      await rtdb.ref('chat/conversaciones').remove();
+      const snap = await db.collection('conversaciones').get();
+      const batch = db.batch();
+      snap.forEach(doc => {
+        batch.set(doc.ref, {
+          hasHistory: false,
+          lastMessageType: null,
+          lastMessagePreview: '',
+          lastMessageTs: null,
+          lastSender: null,
+          lastSenderRole: null,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+      });
+      await batch.commit();
+
+      logger.info('Limpieza simple completada sin lecturas');
     } catch (err) {
-      logger.error('No se pudo leer metadata de conversaciones', err);
-    }
-
-    try {
-      const aliasSnap = await rtdb.ref('chat/aliases').once('value');
-      aliasSnap.forEach(child => userKeys.add(child.key));
-    } catch (err) {
-      logger.error('No se pudo leer aliases', err);
-    }
-
-    // Si no hay usuarios detectados, salir rápido para ahorrar CPU-segundos
-    if (userKeys.size === 0) {
-      logger.info('Limpieza periódica: sin usuarios detectados, se omite ejecución.');
-      return;
-    }
-
-    const summary = {
-      scannedUsers: userKeys.size,
-      trimmedMessages: 0,
-      affectedUsers: []
-    };
-
-    for (const userKey of userKeys) {
-      if (!userKey) continue;
-      try {
-        const removed = await trimConversation(rtdb, db, userKey, cutoffTs);
-        if (removed > 0) {
-          summary.trimmedMessages += removed;
-          summary.affectedUsers.push({ userKey, removed });
-        }
-      } catch (err) {
-        logger.error(`Error limpiando conversación ${userKey}`, err);
-      }
-    }
-
-    if (summary.trimmedMessages > 0) {
-      logger.info('Limpieza periódica completada', summary);
+      logger.error('Error durante limpieza simple', err);
     }
   }
 );
@@ -270,6 +245,7 @@ exports.adminClearChats = onCall({ cors: true }, async (request) => {
   return { deletedRTDB, deletedFS };
 });
 
+
 exports.dailyCleanup = onSchedule(
   {
     schedule: '0 4 * * *', // todos los dias 04:00
@@ -281,12 +257,49 @@ exports.dailyCleanup = onSchedule(
     const rtdb = admin.database();
     const db = admin.firestore();
     try {
+      // Leer todos los mensajes de RTDB antes de borrar
+      const convSnap = await rtdb.ref('chat/conversaciones').once('value');
+      const conversations = convSnap.val() || {};
+      let multimediaCount = 0;
+      for (const userKey of Object.keys(conversations)) {
+        const msgs = conversations[userKey] || {};
+        for (const msgId of Object.keys(msgs)) {
+          const msg = msgs[msgId];
+          // Solo archivar en Firestore si es audio, imagen o PDF
+          if (
+            (msg.y === 'a' && msg.a) || // audio
+            (msg.y === 'i' && (msg.i)) || // imagen
+            (msg.y === 'p' && (msg.p)) // pdf
+          ) {
+            try {
+              await db.collection('mensajes').add({
+                ...(msg.y === 'a' ? { a: msg.a } : {}),
+                ...(msg.y === 'i' ? { i: msg.i, n: msg.n || null } : {}),
+                ...(msg.y === 'p' ? { p: msg.p, n: msg.n || null } : {}),
+                s: msg.s,
+                r: msg.r,
+                x: msg.x,
+                y: msg.y,
+                userKey,
+                rtdbKey: msgId,
+                userKeyNormalized: (userKey || '').toLowerCase(),
+                createdAt: admin.firestore.FieldValue.serverTimestamp()
+              });
+              multimediaCount++;
+            } catch (err) {
+              logger.error(`No se pudo archivar multimedia ${msgId} de ${userKey}`, err);
+            }
+          }
+        }
+      }
+      // Borrar todos los mensajes de RTDB
       await rtdb.ref('chat/conversaciones').remove();
-      logger.info('RTDB: mensajes eliminados de conversaciones');
+      logger.info(`RTDB: mensajes eliminados de conversaciones. Multimedia archivada: ${multimediaCount}`);
     } catch (err) {
-      logger.error('Error limpiando RTDB', err);
+      logger.error('Error limpiando RTDB y archivando multimedia', err);
     }
     try {
+      // Borrar todos los mensajes de Firestore (solo multimedia)
       const delMensajes = await deleteCollectionBatched('mensajes', 500);
       const resetCount = await resetConversationsMetadata(db);
       logger.info(`Base de datos: borrados ${delMensajes} mensajes, metadata reseteada en ${resetCount} conversaciones`);
