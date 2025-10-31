@@ -1336,84 +1336,92 @@
 				function appendMessage(id, msg, userKey) {
 				const wrap = document.createElement('div');
 				// Vista dinámica: el mensaje es "mío" si soy admin y el rol es admin, o si soy usuario y el rol es user
-				const isMyMessage = (currentUser.role === 'admin' && msg.role === 'admin') || 
-				                    (currentUser.role === 'user' && msg.role !== 'admin');
+				// Adaptar claves cortas
+				const roleVal = msg.r || msg.role;
+				const senderVal = msg.s || msg.sender || 'Anónimo';
+				const tsVal = msg.x || msg.ts;
+				const typeVal = msg.y || msg.type;
+				const nameVal = msg.n || msg.name;
+				const textVal = msg.t || msg.text;
+				const imageVal = msg.i || msg.imageDataUrl || msg.imageUrl;
+				const audioVal = msg.a || msg.audioDataUrl;
+				const pdfVal = msg.p || msg.pdfDataUrl || msg.pdfUrl;
+
+				const isMyMessage = (currentUser.role === 'admin' && roleVal === 'admin') || 
+									(currentUser.role === 'user' && roleVal !== 'admin');
 				wrap.className = 'msg ' + (isMyMessage ? 'from-admin' : 'from-user');
-				// id estable para facilitar actualizaciones UI (reacciones)
 				if (id) {
 					wrap.dataset.id = String(id);
 					wrap.id = 'msg_' + String(id);
 				}
 				const meta = document.createElement('div');
 				meta.className = 'meta';
-				// Ocultar el nombre textual cuando el remitente es admin (queda solo el chip "Admin")
-				const shouldShowSenderName = msg.role !== 'admin';
+				const shouldShowSenderName = roleVal !== 'admin';
 				let name;
 				if (shouldShowSenderName) {
 					name = document.createElement('span');
-					name.textContent = msg.sender || 'Anónimo';
+					name.textContent = senderVal;
 				}
 				const role = document.createElement('span');
-				role.className = 'role ' + (msg.role === 'admin' ? 'admin' : 'user');
-				role.textContent = msg.role === 'admin' ? 'Admin' : 'Usuario';
+				role.className = 'role ' + (roleVal === 'admin' ? 'admin' : 'user');
+				role.textContent = roleVal === 'admin' ? 'Admin' : 'Usuario';
 				const time = document.createElement('span');
-				const d = msg.ts ? new Date(msg.ts) : new Date();
+				const d = tsVal ? new Date(tsVal) : new Date();
 				time.textContent = formatDateTime24(d);
 				if (shouldShowSenderName && name) meta.appendChild(name);
 				meta.appendChild(role);
 				meta.appendChild(time);
-					// Botón eliminar para mensajes del admin (visible solo al admin)
-					if (currentUser.role === 'admin' && msg.role === 'admin' && id && userKey) {
-						const delBtn = document.createElement('button');
-						delBtn.type = 'button';
-						delBtn.className = 'btn';
-						delBtn.textContent = 'Eliminar';
-						delBtn.style.marginLeft = 'auto';
-						delBtn.style.padding = '4px 8px';
-						delBtn.style.fontSize = '12px';
-						delBtn.style.borderColor = '#2b3050';
-						delBtn.title = 'Eliminar este mensaje (solo los tuyos)';
-						delBtn.addEventListener('click', async (e) => {
-							e.preventDefault();
-							e.stopPropagation();
-							if (!confirm('¿Eliminar este mensaje?')) return;
-							try {
-								await deleteAdminMessage(id);
-								try { wrap.remove(); } catch {}
-							} catch (err) {
-								alert('No se pudo eliminar el mensaje');
-							}
-						});
-						meta.appendChild(delBtn);
-					}
+				if (currentUser.role === 'admin' && roleVal === 'admin' && id && userKey) {
+					const delBtn = document.createElement('button');
+					delBtn.type = 'button';
+					delBtn.className = 'btn';
+					delBtn.textContent = 'Eliminar';
+					delBtn.style.marginLeft = 'auto';
+					delBtn.style.padding = '4px 8px';
+					delBtn.style.fontSize = '12px';
+					delBtn.style.borderColor = '#2b3050';
+					delBtn.title = 'Eliminar este mensaje (solo los tuyos)';
+					delBtn.addEventListener('click', async (e) => {
+						e.preventDefault();
+						e.stopPropagation();
+						if (!confirm('¿Eliminar este mensaje?')) return;
+						try {
+							await deleteAdminMessage(id);
+							try { wrap.remove(); } catch {}
+						} catch (err) {
+							alert('No se pudo eliminar el mensaje');
+						}
+					});
+					meta.appendChild(delBtn);
+				}
 				wrap.appendChild(meta);
-				if (msg.type === 'image' && (msg.imageUrl || msg.imageDataUrl)) {
+				if (typeVal === 'i' && imageVal) {
 					const imgWrap = document.createElement('div');
 					imgWrap.className = 'image-msg bubble';
 					const img = document.createElement('img');
 					img.loading = 'lazy';
 					img.decoding = 'async';
-					img.src = msg.imageUrl || msg.imageDataUrl;
+					img.src = imageVal;
 					img.alt = 'imagen enviada';
-						img.addEventListener('click', (e) => {
-							e.preventDefault();
-							e.stopPropagation();
-							openImageDialog(img.src);
-						});
+					img.addEventListener('click', (e) => {
+						e.preventDefault();
+						e.stopPropagation();
+						openImageDialog(img.src);
+					});
 					imgWrap.appendChild(img);
 					wrap.appendChild(imgWrap);
 				}
-				if (msg.type === 'audio' && (msg.audioDataUrl)) {
+				if (typeVal === 'a' && audioVal) {
 					const aWrap = document.createElement('div');
 					aWrap.className = 'audio-msg bubble';
 					const audio = document.createElement('audio');
 					audio.controls = true;
-					audio.src = msg.audioDataUrl;
+					audio.src = audioVal;
 					aWrap.appendChild(audio);
 					wrap.appendChild(aWrap);
 				}
-				if (msg.type === 'pdf') {
-					const haveUrl = !!(msg.pdfUrl || msg.pdfDataUrl);
+				if (typeVal === 'p' && pdfVal) {
+					const haveUrl = !!pdfVal;
 					const fileWrap = document.createElement('div');
 					fileWrap.className = 'file-msg bubble';
 					const icon = document.createElement('div');
@@ -1424,23 +1432,22 @@
 					const link = document.createElement('a');
 					link.target = '_blank';
 					link.rel = 'noopener';
-					link.textContent = msg.name || 'Documento PDF';
-					link.href = haveUrl ? (msg.pdfUrl || msg.pdfDataUrl) : '#';
-					if (haveUrl) link.download = msg.name || 'documento.pdf';
+					link.textContent = nameVal || 'Documento PDF';
+					link.href = haveUrl ? pdfVal : '#';
+					if (haveUrl) link.download = nameVal || 'documento.pdf';
 					details.appendChild(link);
-					const sizeBytes = typeof msg.size === 'number' ? msg.size : null;
 					const meta = document.createElement('div');
 					meta.className = 'file-meta';
-					meta.textContent = (sizeBytes && sizeBytes > 0) ? formatFileSize(sizeBytes) : (haveUrl ? '' : 'Subiendo PDF...');
+					meta.textContent = haveUrl ? '' : 'Subiendo PDF...';
 					details.appendChild(meta);
 					fileWrap.appendChild(icon);
 					fileWrap.appendChild(details);
 					wrap.appendChild(fileWrap);
 				}
-				if (msg.text) {
+				if (typeVal === 't' && textVal) {
 					const text = document.createElement('div');
 					text.className = 'text bubble';
-					const raw = (msg.text || '').trim();
+					const raw = (textVal || '').trim();
 					if (/^https?:\/\/\S+/i.test(raw)) {
 						const a = document.createElement('a');
 						a.href = raw;
@@ -1816,37 +1823,27 @@
 			if (!userChatKey) return;
 			const convRef = ref(db, 'chat/conversaciones/' + userChatKey);
 			const payload = {
-				text: trimmed,
-				sender: currentUser.role === 'admin' ? 'Administrador' : currentUser.name || 'Anónimo',
-				role: currentUser.role,
-				ts: nowMs(),
-				timestamp: serverTimestamp()
+				t: trimmed, // texto
+				s: currentUser.role === 'admin' ? 'Administrador' : currentUser.name || 'Anónimo', // sender
+				r: currentUser.role, // role
+				x: nowMs(), // timestamp
+				y: 't' // tipo texto
 			};
 			const newRef = push(convRef);
 			await set(newRef, payload);
+			// NO archivar texto en Firestore
+			appendMessageOnce(newRef.key, payload, userChatKey);
 			try {
-				await addDoc(collection(fs, 'mensajes'), {
-					...payload,
-					userKey: userChatKey,
-					userKeyNormalized: (userChatKey || '').toLowerCase(),
-					rtdbKey: newRef.key || null,
-					createdAt: fsServerTimestamp()
+				await upsertConversationMetadata(userChatKey, {
+					type: 'text',
+					text: trimmed,
+					sender: payload.s,
+					role: payload.r,
+					ts: payload.x
 				});
-				appendMessageOnce(newRef.key, payload, userChatKey);
-			} catch (e) {
-				console.warn('No se pudo archivar en la base de datos', e);
+			} catch (err) {
+				console.warn('No se pudo actualizar metadata de conversación (texto):', err);
 			}
-		try {
-			await upsertConversationMetadata(userChatKey, {
-				type: 'text',
-				text: trimmed,
-				sender: payload.sender,
-				role: payload.role,
-				ts: payload.ts
-			});
-		} catch (err) {
-			console.warn('No se pudo actualizar metadata de conversación (texto):', err);
-		}
 		}
 
 		async function sendCurrentMessage() {
@@ -2160,7 +2157,11 @@
 				await set(newRef, payload);
 				try {
 					await addDoc(collection(fs, 'mensajes'), {
-						...payload,
+						a: payload.audioDataUrl, // audio
+						s: payload.sender,
+						r: payload.role,
+						x: payload.ts,
+						y: 'a', // tipo audio
 						userKey: userChatKey,
 						userKeyNormalized: (userChatKey || '').toLowerCase(),
 						rtdbKey: newRef.key || null,
@@ -2218,9 +2219,14 @@
 					await set(newRef, payload);
 					try {
 						await addDoc(collection(fs, 'mensajes'), {
-							...payload,
+							i: payload.imageDataUrl || payload.imageUrl, // imagen
+							n: payload.name || null, // nombre
+							s: payload.sender,
+							r: payload.role,
+							x: payload.ts,
+							y: 'i', // tipo imagen
 							userKey: userChatKey,
-							userKeyNormalized: (userChatKey || '').toLowerCase(),
+							userKeyNormalized: (userKey || '').toLowerCase(),
 							rtdbKey: newRef.key || null,
 							createdAt: fsServerTimestamp()
 						});
@@ -2294,9 +2300,12 @@
 					// 3) Archivar en Firestore con URL incrustada (puede fallar si excede tamaño)
 					try {
 						await addDoc(collection(fs, 'mensajes'), {
-							...basePayload,
-							pdfDataUrl: dataUrl,
-							uploading: null,
+							p: dataUrl, // PDF
+							n: basePayload.name || null, // nombre
+							s: basePayload.sender,
+							r: basePayload.role,
+							x: basePayload.ts,
+							y: 'p', // tipo pdf
 							userKey: userChatKey,
 							userKeyNormalized: (userChatKey || '').toLowerCase(),
 							rtdbKey: newRef.key || null,
