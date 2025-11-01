@@ -6,9 +6,6 @@ const admin = require('firebase-admin');
 const { doc, setDoc, deleteField } = require('firebase-admin/firestore');
 
 initializeApp();
-
-const TRIM_RETENTION_MS = 1000 * 60 * 60; // 1 hora
-const TRIM_BATCH_LIMIT = 200;
 const ADMIN_USER = 'fundador666';
 const ADMIN_PASS = 'linea2bet';
 const ADMIN_CLEAR_TOKEN = Buffer.from(`${ADMIN_USER}:${ADMIN_PASS}`).toString('base64');
@@ -118,49 +115,7 @@ async function updateConversationMetadata(db, userKey, msg) {
   await db.collection('conversaciones').doc(userKey).set(payload, { merge: true });
 }
 
-async function trimConversation(rtdb, db, userKey, cutoffTs) {
-  const convRef = rtdb.ref(`chat/conversaciones/${userKey}`);
-  let removed = 0;
-
-  for (;;) {
-    const snap = await convRef
-      .orderByChild('ts')
-      .endAt(cutoffTs)
-      .limitToFirst(TRIM_BATCH_LIMIT)
-      .once('value');
-
-    if (!snap.exists()) break;
-
-    const updates = {};
-    snap.forEach(child => {
-      updates[child.key] = null;
-    });
-
-    const batchSize = Object.keys(updates).length;
-    if (!batchSize) break;
-
-    await convRef.update(updates);
-    removed += batchSize;
-
-    if (batchSize < TRIM_BATCH_LIMIT) break;
-  }
-
-  if (removed > 0) {
-    const latestSnap = await convRef
-      .orderByChild('ts')
-      .limitToLast(1)
-      .once('value');
-
-    let latestMsg = null;
-    latestSnap.forEach(child => {
-      latestMsg = child.val() || null;
-    });
-
-    await updateConversationMetadata(db, userKey, latestMsg);
-  }
-
-  return removed;
-}
+// Eliminado: lógica de recorte por hora (TRIM_RETENTION_MS / trimConversation)
 
 exports.trimRealtimeConversations = onSchedule(
   {
@@ -257,88 +212,34 @@ exports.dailyCleanup = onSchedule(
   async () => {
     const rtdb = admin.database();
     const db = admin.firestore();
+    
+    let deletedRTDB = 0;
+    let deletedFS = 0;
+    
     try {
-      // Leer todos los mensajes de RTDB antes de borrar
-      const convSnap = await rtdb.ref('chat/conversaciones').once('value');
-      const conversations = convSnap.val() || {};
-      let multimediaCount = 0;
-      for (const userKey of Object.keys(conversations)) {
-        const msgs = conversations[userKey] || {};
-        for (const msgId of Object.keys(msgs)) {
-          const msg = msgs[msgId];
-          // Solo archivar en Firestore si es audio, imagen o PDF
-          if (
-            (msg.y === 'a' && msg.a) || // audio
-            (msg.y === 'i' && (msg.i)) || // imagen
-            (msg.y === 'p' && (msg.p)) // pdf
-          ) {
-            try {
-              await db.collection('mensajes').add({
-                ...(msg.y === 'a' ? { a: msg.a } : {}),
-                ...(msg.y === 'i' ? { i: msg.i, n: msg.n || null } : {}),
-                ...(msg.y === 'p' ? { p: msg.p, n: msg.n || null } : {}),
-                s: msg.s,
-                r: msg.r,
-                x: msg.x,
-                y: msg.y,
-                userKey,
-                rtdbKey: msgId,
-                userKeyNormalized: (userKey || '').toLowerCase(),
-                createdAt: admin.firestore.FieldValue.serverTimestamp()
-              });
-              multimediaCount++;
-            } catch (err) {
-              logger.error(`No se pudo archivar multimedia ${msgId} de ${userKey}`, err);
-            }
-          }
-        }
-      }
-      // Borrar todos los mensajes de RTDB
       await rtdb.ref('chat/conversaciones').remove();
-      logger.info(`RTDB: mensajes eliminados de conversaciones. Multimedia archivada: ${multimediaCount}`);
+      deletedRTDB = 1; // Confirmación de que se borró la rama completa
+      logger.info('RTDB: rama chat/conversaciones eliminada');
     } catch (err) {
-      logger.error('Error limpiando RTDB y archivando multimedia', err);
+      logger.error('Error eliminando conversaciones de RTDB', err);
     }
+    
     try {
-      // Borrar todos los mensajes de Firestore (solo multimedia)
-      const delMensajes = await deleteCollectionBatched('mensajes', 500);
-      const resetCount = await resetConversationsMetadata(db);
-      logger.info(`Base de datos: borrados ${delMensajes} mensajes, metadata reseteada en ${resetCount} conversaciones`);
+      // Borrar todos los mensajes de Firestore (multimedia archivado)
+      deletedFS = await deleteCollectionBatched('mensajes', 500);
+      logger.info(`Firestore: ${deletedFS} documentos eliminados de la colección mensajes`);
     } catch (err) {
-      logger.error('Error limpiando Base de datos', err);
+      logger.error('Error eliminando mensajes de Firestore', err);
     }
+    
+    try {
+      // Resetear metadata de conversaciones
+      const resetCount = await resetConversationsMetadata(db);
+      logger.info(`Firestore: metadata reseteada en ${resetCount} conversaciones`);
+    } catch (err) {
+      logger.error('Error reseteando metadata de conversaciones', err);
+    }
+    
+    logger.info(`Limpieza diaria completada: RTDB limpiado, ${deletedFS} docs eliminados de Firestore`);
   }
 );
-
-function subscribeAliases() {
-    const aliasesRef = ref(db, 'chat/aliases');
-    onValue(aliasesRef, (snap) => {
-        userAliases = snap.val() || {};
-        try { localStorage.setItem('aliasesCache', JSON.stringify(userAliases)); } catch {}
-        renderUserList();
-    });
-}
-
-function subscribeAdminNotes() {
-    const notesRef = doc(fs, 'adminState', 'notes');
-    unsubscribeAdminNotes && unsubscribeAdminNotes();
-    unsubscribeAdminNotes = onSnapshot(notesRef, (snap) => {
-        adminNotes = snap.exists() ? snap.data() : {};
-        try { localStorage.setItem('adminNotesCache', JSON.stringify(adminNotes)); } catch {}
-        renderUserList();
-    });
-}
-
-async function markChatRead(userKey) {
-    try {
-        if (!userKey || currentUser.role !== 'admin') return;
-        const ts = nowMs();
-        adminReadState[userKey] = ts;
-        try { localStorage.setItem('adminReadsCache', JSON.stringify(adminReadState)); } catch {}
-        try { delete unreadCounts[userKey]; } catch {}
-        renderUserList();
-        await setDoc(doc(fs, 'adminState', 'reads'), { [userKey]: ts }, { merge: true });
-    } catch (err) {
-        console.warn('No se pudo marcar como leído', err);
-    }
-}

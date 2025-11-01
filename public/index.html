@@ -3,12 +3,6 @@
 <head>
 	<!-- Halloween mode: inject pumpkin emoji favicon -->
 	<link rel="icon" type="image/png" href="https://img.icons8.com/emoji/48/000000/jack-o-lantern.png" />
-	<!-- Funding Choices Consent Management for AdSense -->
-	<script async src="https://fundingchoicesmessages.google.com/i/pub-6617508510919967?ers=1"></script>
-	<script>(function() {function signalGooglefcPresent() {if (!window.frames['googlefcPresent']) {if (document.body) {const iframe = document.createElement('iframe'); iframe.style = 'width: 0; height: 0; border: none; z-index: -1000; left: -1000px; top: -1000px;'; iframe.style.display = 'none'; iframe.name = 'googlefcPresent'; document.body.appendChild(iframe);} else {setTimeout(signalGooglefcPresent, 0);}}}signalGooglefcPresent();})();</script>
-	<!-- Google AdSense -->
-	<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6617508510919967" crossorigin="anonymous"></script>
-	<meta name="google-adsense-account" content="ca-pub-6617508510919967">
 	<meta charset="UTF-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 	<title>Red Zenon</title>
@@ -181,6 +175,8 @@
 		.shortcut-card:active { transform: translateY(0); }
 		.image-msg { margin-top: 4px; }
 		.image-msg img { max-width: 100%; height: auto; border-radius: 10px; border: 1px solid var(--border); cursor: pointer; }
+		.image-msg.sticker-msg { max-width: 200px; }
+		.image-msg.sticker-msg img { max-width: 180px; width: 180px; height: auto; border: none; border-radius: 8px; }
 		.audio-msg { 
 			margin-top: 4px; 
 			min-width: clamp(240px, 42vw, 380px);
@@ -433,39 +429,10 @@
 </head>
 <body class="halloween">
 	<!-- Halloween banner -->
-	<script>
-	// Ajuste dinámico del margen superior para evitar que la publicidad tape el chat
-	function adjustChatMargin() {
-		var adsBar = document.getElementById('adsense-top-bar');
-		var container = document.querySelector('.container');
-		if (adsBar && container) {
-			var h = adsBar.offsetHeight || 0;
-			container.style.marginTop = (h + 12) + 'px';
-		}
-	}
-	window.addEventListener('DOMContentLoaded', adjustChatMargin);
-	window.addEventListener('resize', adjustChatMargin);
-	setTimeout(adjustChatMargin, 1000); // por si el anuncio tarda en cargar
-	</script>
 	<div style="width:100vw;max-width:100vw;background:#2c1a2c;color:#ffb347;padding:10px 0;text-align:center;font-size:20px;z-index:10000;box-shadow:0 2px 24px #ff7518aa;position:fixed;top:0;left:0;">
 		🎃 ¡Feliz Halloween! 👻 Disfruta la noche más espeluznante del año con nosotros 🕸️
 	</div>
 	<div style="height:44px;"></div>
-	<div id="cookieNotice" style="position:fixed;bottom:0;left:0;width:100vw;max-width:100vw;background:#222;color:#fff;padding:12px 18px;font-size:15px;z-index:9999;display:none;align-items:center;justify-content:center;gap:12px;box-sizing:border-box;">
-		Este sitio utiliza cookies y tecnologías de terceros (Google AdSense) para mostrar publicidad relevante y mejorar tu experiencia. <button id="acceptCookies" style="margin-left:12px;padding:6px 16px;border-radius:6px;border:none;background:#9c86ff;color:#fff;cursor:pointer;">Aceptar</button>
-	</div>
-	<script>
-		// Mostrar aviso solo si no fue aceptado
-		if (!localStorage.getItem('adsenseCookiesAccepted')) {
-			document.getElementById('cookieNotice').style.display = 'flex';
-			document.getElementById('acceptCookies').onclick = function() {
-				localStorage.setItem('adsenseCookiesAccepted', '1');
-				document.getElementById('cookieNotice').style.display = 'none';
-			};
-		}
-	</script>
-	<!-- AdSense Responsive Ad Unit -->
-
 	<div id="closedBanner" role="status" aria-live="polite">
 		<div class="inner">
 			<span style="font-size:18px">⏰</span>
@@ -792,49 +759,75 @@
 		}
 		if (ageNoBtn) {
 			ageNoBtn.addEventListener('click', () => {
-				// Redirigir a página principal de Google si indica que es menor
-				try { window.location.replace('https://www.google.com/'); } catch { window.location.href = 'https://www.google.com/'; }
-			});
-		}
+			// Redirigir a página principal de Google si indica que es menor
+			try { window.location.replace('https://www.google.com/'); } catch { window.location.href = 'https://www.google.com/'; }
+		});
+	}
 
-				// Enviar sticker al chat
-		const btnCajeroSticker = document.getElementById('btnCajeroSticker');
-		if (btnCajeroSticker) {
-			btnCajeroSticker.onclick = function() {
-				sendStickerMessage();
-			};
-		}
+	// Enviar sticker al chat
+	const btnCajeroSticker = document.getElementById('btnCajeroSticker');
+	if (btnCajeroSticker) {
+		btnCajeroSticker.onclick = async function() {
+			await sendStickerMessage();
+		};
+	}
 
-		function sendStickerMessage() {
-			// Asume que el chat está activo y el usuario puede enviar mensajes
-			const stickerUrl = 'assets/sticker.jpg';
-			const msg = {
-				type: 'sticker',
-				imageUrl: stickerUrl,
-				sender: currentUser.name || 'Usuario',
-				ts: nowMs(),
-			};
-			// Enviar a la función de mensajes (ajusta según tu lógica de envío)
-			if (typeof sendMessage === 'function') {
-				sendMessage(msg);
+	async function sendStickerMessage() {
+		try {
+			// Determinar la clave del chat actual
+			let userChatKey = null;
+			if (currentUser.role === 'admin') {
+				if (!selectedUserKey) return;
+				userChatKey = selectedUserKey;
 			} else {
-				// Fallback: agregar al chat localmente
-				renderStickerMessage(msg);
+				userChatKey = currentUser.name;
 			}
-		}
+			if (!userChatKey) return;
 
-		function renderStickerMessage(msg) {
-			// Renderiza el sticker en el chat
-			const messagesEl = document.getElementById('messages');
-			if (!messagesEl) return;
-			const div = document.createElement('div');
-			div.className = 'message sticker-message';
-			div.innerHTML = `<img src="${msg.imageUrl}" alt="sticker" class="sticker-img" />`;
-			messagesEl.appendChild(div);
-			messagesEl.scrollTop = messagesEl.scrollHeight;
-		}
+			// URL del sticker
+			const stickerUrl = 'assets/sticker.jpg';
+			
 
-		let pendingImageFile = null;
+			// Construir y guardar directamente en Firestore (sin pasar por RTDB)
+			const now = nowMs();
+			const docRef = await addDoc(collection(fs, 'mensajes'), {
+				i: stickerUrl,
+				s: currentUser.role === 'admin' ? 'Administrador' : currentUser.name || 'Anónimo',
+				r: currentUser.role,
+				x: now,
+				y: 'i', // tipo imagen
+				isSticker: true,
+				userKey: userChatKey,
+				userKeyNormalized: (userChatKey || '').toLowerCase(),
+				createdAt: fsServerTimestamp()
+			});
+
+			// Renderizar localmente usando el id de Firestore
+			appendMessageOnce(docRef.id, {
+				i: stickerUrl,
+				s: currentUser.role === 'admin' ? 'Administrador' : currentUser.name || 'Anónimo',
+				r: currentUser.role,
+				x: now,
+				y: 'i',
+				isSticker: true
+			}, userChatKey);
+
+			// Actualizar metadata de la conversación
+			try {
+				await upsertConversationMetadata(userChatKey, {
+					type: 'image',
+					sender: payload.sender,
+					role: payload.role,
+					ts: now
+				});
+			} catch (err) {
+				console.warn('No se pudo actualizar metadata de conversación (sticker):', err);
+			}
+		} catch (error) {
+			console.error('Error al enviar sticker:', error);
+			alert('No se pudo enviar el sticker. Intentalo de nuevo');
+		}
+	}		let pendingImageFile = null;
 		let uploadingImage = false;
 		let pendingPdfFile = null;
 		let sendingPdf = false;
@@ -892,19 +885,6 @@
 	let unsubscribeAdminNotes = null;
 	let userAliases = {};
 
-	// Cargar cache local si existe
-	try {
-		const rawAliases = localStorage.getItem('aliasesCache');
-		if (rawAliases) userAliases = JSON.parse(rawAliases);
-	} catch {}
-	try {
-		const rawNotes = localStorage.getItem('adminNotesCache');
-		if (rawNotes) adminNotes = JSON.parse(rawNotes);
-	} catch {}
-	try {
-		const rawReads = localStorage.getItem('adminReadsCache');
-		if (rawReads) adminReadState = JSON.parse(rawReads);
-	} catch {}
 	let messageIndex = new Map();
 
 	onValue(ref(db, '.info/serverTimeOffset'), (snap) => {
@@ -1424,7 +1404,15 @@
 				const imageVal = msg.i || msg.imageDataUrl || msg.imageUrl;
 				const audioVal = msg.a || msg.audioDataUrl;
 				const pdfVal = msg.p || msg.pdfDataUrl || msg.pdfUrl;
-				const typeVal = msg.type || msg.ty || (imageVal ? 'i' : audioVal ? 'a' : pdfVal ? 'p' : textVal ? 't' : 't');
+				const nameVal = msg.n || msg.name;
+				let typeVal = msg.type || msg.ty || msg.y || (imageVal ? 'i' : audioVal ? 'a' : pdfVal ? 'p' : textVal ? 't' : 't');
+				if (typeof typeVal === 'string') {
+					typeVal = typeVal.toLowerCase();
+				}
+				if (typeVal === 'image') typeVal = 'i';
+				else if (typeVal === 'audio') typeVal = 'a';
+				else if (typeVal === 'pdf') typeVal = 'p';
+				else if (typeVal === 'text') typeVal = 't';
 				const isMyMessage = (currentUser.role === 'admin' && roleVal === 'admin') || 
 									(currentUser.role === 'user' && roleVal !== 'admin');
 				wrap.className = 'msg ' + (isMyMessage ? 'from-admin' : 'from-user');
@@ -1453,6 +1441,9 @@
 				if (typeVal === 'i' && imageVal) {
 					const imgWrap = document.createElement('div');
 					imgWrap.className = 'image-msg bubble';
+					if (msg.isSticker) {
+						imgWrap.classList.add('sticker-msg');
+					}
 					const img = document.createElement('img');
 					img.loading = 'lazy';
 					img.decoding = 'async';
@@ -1647,18 +1638,22 @@
 					// UI local
 					msg.reactionHeart = newVal;
 					updateReactionDom(uniqueId, newVal);
-					// Firestore (histórico): actualizar si existe
+					// Firestore: intentar actualizar por id directo; si falla, buscar por rtdbKey
 					try {
-						const colRef = collection(fs, 'mensajes');
-						const q = fsQuery(colRef, where('rtdbKey', '==', uniqueId), where('userKeyNormalized', '==', (userKey || '').toLowerCase()));
-						const snap = await getDocs(q);
-						if (!snap.empty) {
-							const batch = writeBatch(fs);
-							snap.forEach(d => batch.update(d.ref, { reactionHeart: newVal, updatedAt: fsServerTimestamp() }));
-							await batch.commit();
+						await setDoc(doc(fs, 'mensajes', uniqueId), { reactionHeart: newVal, updatedAt: fsServerTimestamp() }, { merge: true });
+					} catch (err1) {
+						try {
+							const colRef = collection(fs, 'mensajes');
+							const q = fsQuery(colRef, where('rtdbKey', '==', uniqueId), where('userKeyNormalized', '==', (userKey || '').toLowerCase()));
+							const snap = await getDocs(q);
+							if (!snap.empty) {
+								const batch = writeBatch(fs);
+								snap.forEach(d => batch.update(d.ref, { reactionHeart: newVal, updatedAt: fsServerTimestamp() }));
+								await batch.commit();
+							}
+						} catch (err2) {
+							console.warn('No se pudo actualizar reacción en Firestore:', err2);
 						}
-					} catch (err) {
-						console.warn('No se pudo actualizar reacción en base de datos (historial):', err);
 					}
 				} catch (err) {
 					console.error('Error alternando reacción:', err);
@@ -1695,50 +1690,27 @@
 				return;
 			}
 
-			// Intentar cargar los últimos 15 mensajes desde cache local
-			let cached = [];
-			try {
-				const raw = localStorage.getItem('chatCache_' + userKey);
-				if (raw) {
-					cached = JSON.parse(raw);
-				}
-			} catch {}
-			if (Array.isArray(cached) && cached.length > 0) {
-				cached.forEach(({ id, msg }) => {
-					appendMessageOnce(id, msg, userKey);
-				});
-				updateActiveChatHeader();
-			} else {
-				// Si no hay cache, cargar desde RTDB
-				const convRef = ref(db, 'chat/conversaciones/' + userKey);
-				subscribeFirestoreHistory(userKey);
-				const INITIAL_MESSAGE_LIMIT = 15;
-				const convQuery = query(convRef, orderByChild('ts'), limitToLast(INITIAL_MESSAGE_LIMIT));
-				const tempMsgs = [];
-				const childAddedHandler = (snap) => {
-					const val = snap.val() || {};
-					if (!val.ts && val.timestamp) val.ts = val.timestamp;
-					appendMessageOnce(snap.key, val, userKey);
-					handleNewMessage(userKey, val);
-					tempMsgs.push({ id: snap.key, msg: val });
-				};
-				onChildAdded(convQuery, childAddedHandler);
-				chatListener = { ref: convQuery, callback: childAddedHandler };
-				// Guardar en cache al terminar de cargar
-				setTimeout(() => {
-					try {
-						localStorage.setItem('chatCache_' + userKey, JSON.stringify(tempMsgs.slice(-15)));
-					} catch {}
-				}, 1000);
-				// Reflejar cambios en tiempo real (reacciones, URL PDF) sin recargar
-				onChildChanged(convQuery, (snap) => {
-					const val = snap.val() || {};
-					if (!val.ts && val.timestamp) val.ts = val.timestamp;
-					handleChildChanged(snap.key, val, userKey);
-				});
-			}
+			const convRef = ref(db, 'chat/conversaciones/' + userKey);
+			const INITIAL_MESSAGE_LIMIT = 25;
+			subscribeFirestoreHistory(userKey);
+			const convQuery = query(convRef, orderByChild('ts'), limitToLast(INITIAL_MESSAGE_LIMIT));
+			const childAddedHandler = (snap) => {
+				const val = snap.val() || {};
+				if (!val.ts && val.timestamp) val.ts = val.timestamp;
+				appendMessageOnce(snap.key, val, userKey);
+				handleNewMessage(userKey, val);
+			};
+			onChildAdded(convQuery, childAddedHandler);
+			chatListener = { ref: convQuery, callback: childAddedHandler };
+			onChildChanged(convQuery, (snap) => {
+				const val = snap.val() || {};
+				if (!val.ts && val.timestamp) val.ts = val.timestamp;
+				handleChildChanged(snap.key, val, userKey);
+			});
 
 			const messagesEl = document.getElementById('messages');
+			if (!messagesEl) return;
+			selectedUserKey = userKey;
 			let isLoadingOldMessages = false;
 
 			const scrollHandler = async () => {
@@ -1756,11 +1728,16 @@
 					const moreQuery = query(convRef, orderByChild('ts'), endAt(oldestTs - 1), limitToLast(INITIAL_MESSAGE_LIMIT));
 					const snapshot = await get(moreQuery);
 					const data = snapshot.val() || {};
-					const entries = Object.entries(data);
+					const entries = Object.entries(data).sort((a, b) => {
+						const aTs = Number((a[1] && (a[1].ts || a[1].timestamp)) || 0);
+						const bTs = Number((b[1] && (b[1].ts || b[1].timestamp)) || 0);
+						return aTs - bTs;
+					});
 					for (const [key, val] of entries) {
-					if (!renderedMessageIds.has(key)) {
-						appendMessageOnce(key, val);
-					}
+						if (!val.ts && val.timestamp) val.ts = val.timestamp;
+						if (!renderedMessageIds.has(key)) {
+							appendMessageOnce(key, val, userKey);
+						}
 					}
 				} catch (err) {
 					console.error("Error cargando mensajes antiguos:", err);
@@ -1771,7 +1748,6 @@
 			};
 			messagesEl.addEventListener('scroll', scrollHandler);
 			messagesScrollHandler = scrollHandler;
-			selectedUserKey = userKey;
 			clearUnread(userKey);
 			// Marcar como leído persistentemente al abrir el chat (solo admin)
 			if (currentUser.role === 'admin') {
@@ -2180,37 +2156,32 @@
 					userChatKey = currentUser.name;
 				}
 				if (!userChatKey) return;
-				const convRef = ref(db, 'chat/conversaciones/' + userChatKey);
-				const payload = {
-					type: 'audio',
-					audioDataUrl,
-					sender: currentUser.role === 'admin' ? 'Administrador' : currentUser.name || 'Anónimo',
-					role: currentUser.role,
-					ts: nowMs(),
-					timestamp: serverTimestamp()
-				};
-				const newRef = push(convRef);
-				await set(newRef, payload);
+				const now = nowMs();
 				try {
-					await addDoc(collection(fs, 'mensajes'), {
-						a: payload.audioDataUrl, // audio
-						s: payload.sender,
-						r: payload.role,
-						x: payload.ts,
-						y: 'a', // tipo audio
+					const docRef = await addDoc(collection(fs, 'mensajes'), {
+						a: audioDataUrl,
+						s: currentUser.role === 'admin' ? 'Administrador' : currentUser.name || 'Anónimo',
+						r: currentUser.role,
+						x: now,
+						y: 'a',
 						userKey: userChatKey,
 						userKeyNormalized: (userChatKey || '').toLowerCase(),
-						rtdbKey: newRef.key || null,
 						createdAt: fsServerTimestamp()
 					});
-					appendMessageOnce(newRef.key, payload, userChatKey);
-				} catch (e) { console.warn('No se pudo archivar audio en base de datos:', e); }
+					appendMessageOnce(docRef.id, {
+						a: audioDataUrl,
+						s: currentUser.role === 'admin' ? 'Administrador' : currentUser.name || 'Anónimo',
+						r: currentUser.role,
+						x: now,
+						y: 'a'
+					}, userChatKey);
+				} catch (e) { console.warn('No se pudo guardar audio en Firestore:', e); }
 				try {
 					await upsertConversationMetadata(userChatKey, {
 						type: 'audio',
-						sender: payload.sender,
-						role: payload.role,
-						ts: payload.ts
+						sender: currentUser.role === 'admin' ? 'Administrador' : currentUser.name || 'Anónimo',
+						role: currentUser.role,
+						ts: now
 					});
 				} catch (err) {
 					console.warn('No se pudo actualizar metadata de conversación (audio):', err);
@@ -2236,47 +2207,42 @@
 						userChatKey = currentUser.name;
 					}
 					if (!userChatKey) return;
-					const convRef = ref(db, 'chat/conversaciones/' + userChatKey);
 					const dataUrl = await compressImageToDataURL(file, { maxSize: 960, quality: 0.75 });
 					const approxBytes = Math.ceil((dataUrl.length - 'data:image/jpeg;base64,'.length) * 3 / 4);
 					if (approxBytes > 400 * 1024) {
 						throw new Error('La imagen es muy pesada');
 					}
-					const payload = {
-						type: 'image',
-						imageDataUrl: dataUrl,
-						name: file.name || null,
-						sender: currentUser.role === 'admin' ? 'Administrador' : currentUser.name || 'Anónimo',
-						role: currentUser.role,
-						ts: nowMs(),
-						timestamp: serverTimestamp()
-					};
-					const newRef = push(convRef);
-					await set(newRef, payload);
+					const now = nowMs();
 					try {
-						await addDoc(collection(fs, 'mensajes'), {
-							i: payload.imageDataUrl || payload.imageUrl, // imagen
-							n: payload.name || null, // nombre
-							s: payload.sender,
-							r: payload.role,
-							x: payload.ts,
-							y: 'i', // tipo imagen
+						const docRef = await addDoc(collection(fs, 'mensajes'), {
+							i: dataUrl,
+							n: file.name || null,
+							s: currentUser.role === 'admin' ? 'Administrador' : currentUser.name || 'Anónimo',
+							r: currentUser.role,
+							x: now,
+							y: 'i',
 							userKey: userChatKey,
-							userKeyNormalized: (userKey || '').toLowerCase(),
-							rtdbKey: newRef.key || null,
+							userKeyNormalized: (userChatKey || '').toLowerCase(),
 							createdAt: fsServerTimestamp()
 						});
-						appendMessageOnce(newRef.key, payload, userChatKey);
+						appendMessageOnce(docRef.id, {
+							i: dataUrl,
+							n: file.name || null,
+							s: currentUser.role === 'admin' ? 'Administrador' : currentUser.name || 'Anónimo',
+							r: currentUser.role,
+							x: now,
+							y: 'i'
+						}, userChatKey);
 					} catch (e) {
-						console.warn('No se pudo archivar imagen en base de datos:', e);
+						console.warn('No se pudo guardar imagen en Firestore:', e);
 					}
 					try {
 						await upsertConversationMetadata(userChatKey, {
 							type: 'image',
-							name: payload.name || null,
-							sender: payload.sender,
-							role: payload.role,
-							ts: payload.ts
+							name: file.name || null,
+							sender: currentUser.role === 'admin' ? 'Administrador' : currentUser.name || 'Anónimo',
+							role: currentUser.role,
+							ts: now
 						});
 					} catch (err) {
 						console.warn('No se pudo actualizar metadata de conversación (imagen):', err);
@@ -2305,51 +2271,35 @@
 					userChatKey = currentUser.name;
 				}
 				if (!userChatKey) return;
-				const convRef = ref(db, 'chat/conversaciones/' + userChatKey);
-				// 1) Enviar placeholder inmediato para percepción de "tiempo real"
-				const basePayload = {
-					type: 'pdf',
-					name: file.name || null,
-					size: typeof file.size === 'number' ? file.size : null,
-					sender: currentUser.role === 'admin' ? 'Administrador' : currentUser.name || 'Anónimo',
-					role: currentUser.role,
-					ts: nowMs(),
-					timestamp: serverTimestamp(),
-					uploading: true
-				};
-				const newRef = push(convRef);
-				await set(newRef, basePayload);
-				appendMessageOnce(newRef.key, basePayload, userChatKey);
-				try {
-					await upsertConversationMetadata(userChatKey, {
-						type: 'pdf',
-						name: basePayload.name || null,
-						sender: basePayload.sender,
-						role: basePayload.role,
-						ts: basePayload.ts
-					});
-				} catch {}
-				// 2) Codificar a Data URL y actualizar mensaje existente
 				try {
 					const dataUrl = await fileToDataUrl(file);
-					await update(newRef, { pdfDataUrl: dataUrl, uploading: null });
-					// 3) Archivar en Firestore con URL incrustada (puede fallar si excede tamaño)
-					try {
-						await addDoc(collection(fs, 'mensajes'), {
-							p: dataUrl, // PDF
-							n: basePayload.name || null, // nombre
-							s: basePayload.sender,
-							r: basePayload.role,
-							x: basePayload.ts,
-							y: 'p', // tipo pdf
-							userKey: userChatKey,
-							userKeyNormalized: (userChatKey || '').toLowerCase(),
-							rtdbKey: newRef.key || null,
-							createdAt: fsServerTimestamp()
-						});
-					} catch (err) {
-						console.warn('No se pudo archivar PDF en base de datos:', err);
-					}
+					const now = nowMs();
+					const docRef = await addDoc(collection(fs, 'mensajes'), {
+						p: dataUrl,
+						n: file.name || null,
+						s: currentUser.role === 'admin' ? 'Administrador' : currentUser.name || 'Anónimo',
+						r: currentUser.role,
+						x: now,
+						y: 'p',
+						userKey: userChatKey,
+						userKeyNormalized: (userChatKey || '').toLowerCase(),
+						createdAt: fsServerTimestamp()
+					});
+					appendMessageOnce(docRef.id, {
+						p: dataUrl,
+						n: file.name || null,
+						s: currentUser.role === 'admin' ? 'Administrador' : currentUser.name || 'Anónimo',
+						r: currentUser.role,
+						x: now,
+						y: 'p'
+					}, userChatKey);
+					await upsertConversationMetadata(userChatKey, {
+						type: 'pdf',
+						name: file.name || null,
+						sender: currentUser.role === 'admin' ? 'Administrador' : currentUser.name || 'Anónimo',
+						role: currentUser.role,
+						ts: now
+					});
 				} catch (err) {
 					console.error('Error preparando/enviando PDF:', err);
 					throw err;
@@ -2791,51 +2741,48 @@
 					const col = collection(fs, 'mensajes');
 					const normalized = (userKey || '').toLowerCase();
 					const unsubs = [];
-					const handler = (snap) => {
-						const docs = snap.docs || [];
-						const entries = docs.map((d) => {
+					const changeHandler = (snap) => {
+						const changes = snap.docChanges();
+						for (const ch of changes) {
+							const d = ch.doc;
 							const data = d.data() || {};
 							const id = data.rtdbKey || d.id;
 							const tsFromCreatedAt = data.createdAt && typeof data.createdAt.toMillis === 'function' ? data.createdAt.toMillis() : null;
-							const ts = (typeof data.ts === 'number') ? data.ts : (tsFromCreatedAt ?? (d.createTime ? d.createTime.toMillis() : Date.now()));
-							const inferredType = data.type || (data.audioDataUrl ? 'audio' : ((data.imageDataUrl || data.imageUrl) ? 'image' : (data.text ? 'text' : null)));
-							return {
-								id,
-								ts,
-								msg: {
-									type: inferredType || undefined,
-									text: data.text || null,
-									imageDataUrl: data.imageDataUrl || data.imageUrl || null,
-									audioDataUrl: data.audioDataUrl || null,
-									name: data.name || null,
-									sender: data.sender || 'Anónimo',
-									role: data.role || 'user',
-									ts: ts
-								}
+							const ts = (typeof data.x === 'number') ? data.x : (typeof data.ts === 'number' ? data.ts : (tsFromCreatedAt ?? (d.createTime ? d.createTime.toMillis() : Date.now())));
+							// Determinar tipo e hidratar claves cortas
+							let inferredType = data.type;
+							if (!inferredType) {
+								if (data.y === 'i' || data.i) inferredType = 'image';
+								else if (data.y === 'a' || data.a) inferredType = 'audio';
+								else if (data.y === 'p' || data.p) inferredType = 'pdf';
+								else if (data.t || data.text) inferredType = 'text';
+							}
+							const msg = {
+								type: inferredType || undefined,
+								t: data.t || data.text || null,
+								i: data.i || data.imageDataUrl || data.imageUrl || null,
+								a: data.a || data.audioDataUrl || null,
+								p: data.p || data.pdfDataUrl || data.pdfUrl || null,
+								n: data.n || data.name || null,
+								s: data.s || data.sender || 'Anónimo',
+								r: data.r || data.role || 'user',
+								x: ts,
+								y: data.y || undefined,
+								isSticker: !!data.isSticker,
+								reactionHeart: !!data.reactionHeart
 							};
-						}).sort((a, b) => (a.ts || 0) - (b.ts || 0));
-						const startIndex = Math.max(0, entries.length - FIRESTORE_HISTORY_LIMIT);
-						for (let i = startIndex; i < entries.length; i++) {
-							const { id, msg } = entries[i];
-							appendMessageOnce(id, msg, userKey);
-						}
-						const lastEntry = entries.length ? entries[entries.length - 1] : null;
-						if (lastEntry) {
-							const msg = lastEntry.msg || {};
-							const type = msg.audioDataUrl ? 'audio' : (msg.imageDataUrl ? 'image' : 'text');
-							upsertConversationMetadata(userKey, {
-								type,
-								text: msg.text || null,
-								name: msg.name || null,
-								sender: msg.sender,
-								role: msg.role,
-								ts: msg.ts
-							}).catch((err) => console.warn('No se pudo actualizar metadata desde historial:', err));
+							if (ch.type === 'added') {
+								appendMessageOnce(id, msg, userKey);
+							} else if (ch.type === 'modified') {
+								handleChildChanged(id, msg, userKey);
+							} else if (ch.type === 'removed') {
+								// opcional: eliminar del DOM si fuera necesario
+							}
 						}
 					};
-					unsubs.push(onSnapshot(fsQuery(col, where('userKeyNormalized', '==', normalized)), handler, (err) => console.warn('Error hist FS normalized', err)));
+					unsubs.push(onSnapshot(fsQuery(col, where('userKeyNormalized', '==', normalized)), changeHandler, (err) => console.warn('Error hist FS normalized', err)));
 					if (normalized !== userKey) {
-						unsubs.push(onSnapshot(fsQuery(col, where('userKey', '==', userKey)), handler, (err) => console.warn('Error hist FS legacy', err)));
+						unsubs.push(onSnapshot(fsQuery(col, where('userKey', '==', userKey)), changeHandler, (err) => console.warn('Error hist FS legacy', err)));
 					}
 					unsubscribeHistoryFS = () => { unsubs.forEach(u => { try { u(); } catch {} }); };
 				} catch (err) {
@@ -3077,44 +3024,54 @@
 							deleteChatFromList(user);
 						}
 					};
-				// Función para borrar el chat de la lista (solo UI y memoria, no mensajes en DB)
+				// Función para borrar completamente el chat (UI + RTDB + Firestore)
 				async function deleteChatFromList(userKey) {
+					const normalized = (userKey && userKey.toLowerCase) ? userKey.toLowerCase() : (userKey || '');
 					try {
+						// 1) Eliminar UI local y memoria
 						if (userListPanel) {
 							const btn = userListPanel.querySelector(`[data-user-key="${userKey}"]`);
 							if (btn) btn.remove();
 						}
-						// Eliminar de la memoria local
-						if (conversations && conversations[userKey]) {
-							delete conversations[userKey];
-						}
-						if (conversationMeta && conversationMeta[userKey]) {
-							delete conversationMeta[userKey];
-						}
-						if (knownUserKeys && knownUserKeys.has(userKey)) {
-							knownUserKeys.delete(userKey);
-						}
-						// Si el chat borrado era el seleccionado, limpiar vista
+						if (conversations && conversations[userKey]) delete conversations[userKey];
+						if (conversationMeta && conversationMeta[userKey]) delete conversationMeta[userKey];
+						if (knownUserKeys && knownUserKeys.has(userKey)) knownUserKeys.delete(userKey);
 						if (selectedUserKey === userKey) {
 							selectedUserKey = null;
 							clearChat();
 							updateActiveChatHeader();
 						}
 
-						// Eliminar de Firestore (colección 'conversations')
+						// 2) Borrar RTDB: conversación y alias
+						try { await remove(ref(db, 'chat/conversaciones/' + userKey)); } catch (err) { console.warn('No se pudo borrar RTDB conversación:', err); }
+						try { await remove(ref(db, 'chat/aliases/' + normalized)); } catch (err) { /* opcional */ }
+
+						// 3) Firestore: borrar metadata de conversación y nota del admin
+						try { await deleteDoc(doc(fs, 'conversaciones', userKey)); } catch (err) { console.warn('No se pudo borrar metadata de conversación:', err); }
+						try { await deleteDoc(doc(fs, 'adminNotes', userKey)); } catch (err) { /* opcional */ }
+
+						// 4) Firestore: borrar todos los mensajes de ese usuario
 						try {
-							const convDoc = doc(fs, 'conversations', userKey);
-							await deleteDoc(convDoc);
-						} catch (err) {
-							console.warn('No se pudo borrar el chat en Firestore:', err);
-						}
-						// Eliminar de Realtime Database (rama 'conversations')
+							const colRef = collection(fs, 'mensajes');
+							// Preferir userKeyNormalized, y fallback por userKey
+							const snaps = [];
+							snaps.push(await getDocs(fsQuery(colRef, where('userKeyNormalized', '==', normalized))));
+							if (normalized !== userKey) {
+								snaps.push(await getDocs(fsQuery(colRef, where('userKey', '==', userKey))));
+							}
+							const batch = writeBatch(fs);
+							let batched = 0;
+							for (const snap of snaps) {
+								snap.forEach(d => { batch.delete(d.ref); batched++; });
+							}
+							if (batched > 0) await batch.commit();
+						} catch (err) { console.warn('No se pudieron borrar mensajes en Firestore:', err); }
+
+						// 5) Opcional: limpiar estado de lectura del admin (deja null si existe campo)
 						try {
-							const convRef = ref(db, 'conversations/' + userKey);
-							await remove(convRef);
-						} catch (err) {
-							console.warn('No se pudo borrar el chat en RTDB:', err);
-						}
+							await setDoc(doc(fs, 'adminState', 'reads'), { [userKey]: null }, { merge: true });
+						} catch (err) { /* opcional */ }
+
 					} catch (err) {
 						alert('No se pudo borrar el chat: ' + err);
 					}
@@ -3215,16 +3172,4 @@
 		}
 	</script>
 </body>
-	<!-- AdSense Ad Block Above Composer -->
-	<div id="adsense-top-bar">
-		<div class="adsense-inner">
-			<ins class="adsbygoogle"
-				style="display:block;width:100%;height:90px;"
-				data-ad-client="ca-pub-6617508510919967"
-				data-ad-slot="1234567890"
-				data-ad-format="auto"
-				data-full-width-responsive="true"></ins>
-			<script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
-		</div>
-	</div>
 </html>
