@@ -618,7 +618,8 @@
 						<div class="cajero">
 
 							<div class="panel-card" id="btnCajeroSound" title="Elegir sonido de notificaciones personalizado">NOTIFI.</div>
-							<div class="panel-card" id="btnCajeroSupport" title="En caso de tener un problema, contactarse al siguiente número de whatsapp: +54 1164147048">SOPORTE</div>
+						<div class="panel-card" id="btnCajeroSticker" title="Enviar un sticker divertido al chat">STICKER</div>
+						<div class="panel-card" id="btnCajeroSupport" title="En caso de tener un problema, contactarse al siguiente número de whatsapp: +54 1164147048">SOPORTE</div>
 						</div>
 					</div>
 				</div>
@@ -794,6 +795,43 @@
 				// Redirigir a página principal de Google si indica que es menor
 				try { window.location.replace('https://www.google.com/'); } catch { window.location.href = 'https://www.google.com/'; }
 			});
+		}
+
+				// Enviar sticker al chat
+		const btnCajeroSticker = document.getElementById('btnCajeroSticker');
+		if (btnCajeroSticker) {
+			btnCajeroSticker.onclick = function() {
+				sendStickerMessage();
+			};
+		}
+
+		function sendStickerMessage() {
+			// Asume que el chat está activo y el usuario puede enviar mensajes
+			const stickerUrl = 'assets/sticker.jpg';
+			const msg = {
+				type: 'sticker',
+				imageUrl: stickerUrl,
+				sender: currentUser.name || 'Usuario',
+				ts: nowMs(),
+			};
+			// Enviar a la función de mensajes (ajusta según tu lógica de envío)
+			if (typeof sendMessage === 'function') {
+				sendMessage(msg);
+			} else {
+				// Fallback: agregar al chat localmente
+				renderStickerMessage(msg);
+			}
+		}
+
+		function renderStickerMessage(msg) {
+			// Renderiza el sticker en el chat
+			const messagesEl = document.getElementById('messages');
+			if (!messagesEl) return;
+			const div = document.createElement('div');
+			div.className = 'message sticker-message';
+			div.innerHTML = `<img src="${msg.imageUrl}" alt="sticker" class="sticker-img" />`;
+			messagesEl.appendChild(div);
+			messagesEl.scrollTop = messagesEl.scrollHeight;
 		}
 
 		let pendingImageFile = null;
