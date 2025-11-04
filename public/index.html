@@ -3,6 +3,7 @@
 <head>
 	<!-- Halloween mode: inject pumpkin emoji favicon -->
 	<link rel="icon" type="image/png" href="https://img.icons8.com/emoji/48/000000/jack-o-lantern.png" />
+
 	<meta charset="UTF-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 	<title>Red Zenon</title>
@@ -195,6 +196,147 @@
 		.reaction-heart { font-size: 18px; margin-top: 2px; user-select: none; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.35)); }
 		.msg.from-admin .reaction-heart { align-self: flex-end; }
 		.msg.from-user .reaction-heart { align-self: flex-start; }
+		/* Botón de eliminar mensaje */
+		.delete-message-btn {
+			position: absolute;
+			top: 6px;
+			right: 6px;
+			width: 24px;
+			height: 24px;
+			border-radius: 6px;
+			background: linear-gradient(180deg, #3a1520, #2a1016);
+			border: 1px solid #b32b45;
+			color: #ffd7de;
+			font-size: 14px;
+			display: none;
+			align-items: center;
+			justify-content: center;
+			cursor: pointer;
+			opacity: 0;
+			transition: opacity 0.2s ease, transform 0.1s ease;
+			z-index: 10;
+		}
+		.delete-message-btn:hover {
+			background: linear-gradient(180deg, #4a1828, #3a1420);
+			transform: scale(1.1);
+		}
+		.msg { position: relative; }
+		.msg:hover .delete-message-btn {
+			opacity: 1;
+		}
+		/* Tooltip de copiado */
+		.copy-tooltip {
+			position: absolute;
+			bottom: 100%;
+			left: 50%;
+			transform: translateX(-50%) translateY(-8px);
+			background: linear-gradient(135deg, #55d69c, #4ac98a);
+			color: #fff;
+			padding: 8px 16px;
+			border-radius: 12px;
+			font-size: 13px;
+			font-weight: 600;
+			white-space: nowrap;
+			pointer-events: none;
+			z-index: 1000;
+			box-shadow: 0 4px 16px rgba(85, 214, 156, 0.4);
+			animation: slideUpFade 0.3s ease-out, fadeOut 0.3s ease-in 2s forwards;
+			display: flex;
+			align-items: center;
+			gap: 6px;
+		}
+		.copy-tooltip::before {
+			content: '✓';
+			font-size: 16px;
+			font-weight: bold;
+		}
+		.copy-tooltip::after {
+			content: '';
+			position: absolute;
+			top: 100%;
+			left: 50%;
+			transform: translateX(-50%);
+			width: 0;
+			height: 0;
+			border-left: 6px solid transparent;
+			border-right: 6px solid transparent;
+			border-top: 6px solid #4ac98a;
+		}
+		@keyframes slideUpFade {
+			from {
+				opacity: 0;
+				transform: translateX(-50%) translateY(0);
+			}
+			to {
+				opacity: 1;
+				transform: translateX(-50%) translateY(-8px);
+			}
+		}
+		@keyframes fadeOut {
+			to {
+				opacity: 0;
+				transform: translateX(-50%) translateY(-12px);
+			}
+		}
+		/* Efecto de presionado */
+		.msg.pressing {
+			transform: scale(0.98);
+			transition: transform 0.1s ease;
+		}
+		/* Botón toggle para panel de accesos rápidos */
+		#shortcutsToggleBtn {
+			position: fixed;
+			right: 20px;
+			top: 50%;
+			transform: translateY(-50%);
+			width: 32px;
+			height: 64px;
+			background: linear-gradient(135deg, var(--primary), var(--primary-strong));
+			border: 1px solid var(--border);
+			border-radius: 8px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			cursor: pointer;
+			font-size: 18px;
+			color: #fff;
+			transition: all 0.3s ease;
+			z-index: 9999;
+			box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+		}
+		#shortcutsToggleBtn:hover {
+			background: linear-gradient(135deg, var(--primary-strong), var(--primary));
+			transform: translateY(-50%) scale(1.1);
+			box-shadow: 0 6px 20px rgba(156,134,255,0.5);
+		}
+		#shortcutsToggleBtn:active {
+			transform: translateY(-50%) scale(0.95);
+		}
+		#shortcutsCard {
+			position: relative;
+			transition: all 0.3s ease;
+		}
+		#shortcutsCard.collapsed {
+			width: 0 !important;
+			min-width: 0 !important;
+			max-width: 0 !important;
+			padding: 0 !important;
+			margin: 0 !important;
+			border: none !important;
+			overflow: hidden;
+			opacity: 0;
+		}
+		#shortcutsCard.collapsed .header,
+		#shortcutsCard.collapsed .content {
+			display: none;
+		}
+		#chatRow {
+			transition: gap 0.3s ease;
+			position: relative;
+		}
+		#chatRow.shortcuts-collapsed {
+			gap: 0 !important;
+		}
 		.file-msg {
 			margin-top: 4px;
 			display: flex;
@@ -260,7 +402,7 @@
 		#userListPanel { border: 1px solid var(--border); border-radius: 12px; padding: 10px; background: linear-gradient(180deg, #10131c, #0f1118); }
 		#userListPanel { max-height: 70vh; overflow: auto; display: flex; flex-direction: column; }
 		#userListPanel > div:first-child { color: #e6e9f3; }
-		#userList .btn { gap: 10px; display: flex; align-items: center; background: linear-gradient(180deg, #141726, #101320); border-color: #1f2234; }
+		#userList .btn { gap: 10px; display: flex; align-items: center; background: linear-gradient(180deg, #141726, #101320); border-color: #1f2234; color: #e6e9f3; }
 		#userList .btn:hover { border-color: #2b3050; box-shadow: 0 6px 16px rgba(0,0,0,0.25); }
 		.list-avatar { width: 18px; height: 18px; border-radius: 4px; object-fit: contain; filter: drop-shadow(0 0 4px rgba(255,190,11,0.25)); }
 		dialog { 
@@ -438,8 +580,8 @@
 			<span style="font-size:18px">⏰</span>
 			<div style="flex:1">
 				<strong>Fuera de horario de atención</strong>
-				<span style="opacity:.9">· 04:00–10:00 (Buenos Aires)</span>
-				<div style="font-weight:500;color:#ffd7de;opacity:.9; font-size:13px;">El administrador no está activo ahora. Podés dejar tu mensaje; responderemos a partir de las 10:00.</div>
+				<span style="opacity:.9">· 04:00–8:00 (Buenos Aires)</span>
+				<div style="font-weight:500;color:#ffd7de;opacity:.9; font-size:13px;">El administrador no está activo ahora. Podés dejar tu mensaje; responderemos a partir de las 8:00.</div>
 			</div>
 			<span class="badge" style="font-weight:700">CERRADO</span>
 		</div>
@@ -448,8 +590,8 @@
 		<div class="cardy">
 			<div class="stamp">CERRADO</div>
 			<div class="title">Fuera de horario</div>
-			<div class="subtitle">El administrador no está activo entre <strong>04:00</strong> y <strong>10:00</strong> (Buenos Aires).</div>
-			<div class="note">Podés dejar tu mensaje con tranquilidad; lo veremos a partir de las 10:00. Gracias por tu paciencia.</div>
+			<div class="subtitle">El administrador no está activo entre <strong>04:00</strong> y <strong>8:00</strong> (Buenos Aires).</div>
+			<div class="note">Podés dejar tu mensaje con tranquilidad; lo veremos a partir de las 8:00. Gracias por tu paciencia.</div>
 			<div class="actions">
 				<button id="closedDismissBtn" type="button">Entendido</button>
 			</div>
@@ -550,11 +692,12 @@
 					<div id="closedOverlay" class="closed-overlay">
 						<div class="panel">
 							<div class="title">⏰ Fuera de horario</div>
-							<div class="desc">El administrador no está activo entre <strong>04:00</strong> y <strong>10:00</strong> (Buenos Aires). Podés dejar tu mensaje; responderemos a partir de las 10:00.</div>
+							<div class="desc">El administrador no está activo entre <strong>04:00</strong> y <strong>8:00</strong> (Buenos Aires). Podés dejar tu mensaje; responderemos a partir de las 8:00.</div>
 						</div>
 					</div>
 				</div>
 			</div>
+			<button id="shortcutsToggleBtn" title="Ocultar/Mostrar panel" style="display:none;">◀</button>
 			<div class="card" id="shortcutsCard" style="display:none;min-width:260px;max-width:300px;">
 				<div class="header">
 					<div class="title">Accesos rápidos</div>
@@ -798,8 +941,6 @@
 				userChatKey = currentUser.name;
 			}
 			if (!userChatKey) return;
-
-			// URL del sticker
 			const stickerUrl = 'assets/sticker.jpg';
 			
 
@@ -898,7 +1039,7 @@
 	let unsubscribeAdminReads = null;
 	let adminNotes = {};
 	let unsubscribeAdminNotes = null;
-	let userAliases = {};
+	let userAliases = {}; // Ahora se cargará desde Firestore
 
 	let messageIndex = new Map();
 
@@ -932,7 +1073,7 @@
 			const parts = new Intl.DateTimeFormat('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', hour12: false, hour: 'numeric' }).formatToParts(date);
 			const hourStr = parts.find(p => p.type === 'hour')?.value || '0';
 			const hour = parseInt(hourStr, 10);
-			return hour >= 4 && hour < 10;
+			return hour >= 4 && hour < 8;
 		} catch {
 			return false;
 		}
@@ -1037,6 +1178,12 @@
 		const isAdmin = currentUser.role === 'admin';
 		document.getElementById('userListPanel').style.display = (isLoggedIn && isAdmin) ? '' : 'none';
 		if (shortcutsCard) shortcutsCard.style.display = (isLoggedIn && isAdmin) ? '' : 'none';
+		
+		// Mostrar/ocultar botón toggle del panel
+		const shortcutsToggleBtn = document.getElementById('shortcutsToggleBtn');
+		if (shortcutsToggleBtn) {
+			shortcutsToggleBtn.style.display = (isLoggedIn && isAdmin) ? 'flex' : 'none';
+		}
 
 		const logoutBtn = document.getElementById('logoutBtn');
 		if (isLoggedIn) {
@@ -1065,13 +1212,16 @@
 			selectedUserKey = null;
 			clearChat();
 			clearUserList();
+			// Al salir, limpiar vistas previas en UI y estado
 			try { clearImagePreview && clearImagePreview(); } catch {}
 			try { clearAudioPreview && clearAudioPreview(); } catch {}
 			stopInactivityWatch && stopInactivityWatch();
 		}
+
 		updateActiveChatHeader();
 		updateClosedStateUI();
 	}
+
 
 		// ========== SISTEMA DE NOTIFICACIONES ==========
 		function getAudioContext() {
@@ -1111,15 +1261,21 @@
 			return notificationSound;
 		}
 		function playNotificationSound() {
+
+			// Eliminado: toast de copiado (requerimiento: copiar sin avisos visuales)
+			// Si hay sonido personalizado, usarlo
 			if (customNotificationDataUrl) {
 				try {
 					if (!customNotificationAudio) {
 						customNotificationAudio = new Audio(customNotificationDataUrl);
 						customNotificationAudio.preload = 'auto';
 					}
+					// Reiniciar y reproducir
 					try { customNotificationAudio.currentTime = 0; } catch {}
+					// Aplicar volumen guardado
 					try { customNotificationAudio.volume = getSavedVolume(); } catch {}
 					customNotificationAudio.play().catch(() => {
+						// Si falla por política del navegador, caer al beep
 						playDefaultBeep();
 					});
 					return;
@@ -1219,9 +1375,26 @@
 
 		// Mostrar notificación Push
 		function showNotification(title, body, icon = 'assets/logo.png') {
-			if (!notificationsEnabled || Notification.permission !== 'granted') {
+			// Forzar la notificación: si no hay permiso, solicitarlo automáticamente
+			if (Notification.permission === 'default') {
+				Notification.requestPermission().then(permission => {
+					if (permission === 'granted') {
+						notificationsEnabled = true;
+						showNotificationNow(title, body, icon);
+					}
+				});
 				return;
 			}
+			
+			if (Notification.permission !== 'granted') {
+				console.warn('Notificaciones no permitidas');
+				return;
+			}
+			
+			showNotificationNow(title, body, icon);
+		}
+		
+		function showNotificationNow(title, body, icon) {
 			try {
 				const notification = new Notification(title, {
 					body: body,
@@ -1229,9 +1402,10 @@
 					badge: icon,
 					tag: 'mensaje-nuevo',
 					requireInteraction: false,
-					silent: false
+					silent: false,
+					vibrate: [200, 100, 200]
 				});
-				setTimeout(() => notification.close(), 5000);
+				setTimeout(() => notification.close(), 6000);
 				notification.onclick = () => {
 					window.focus();
 					notification.close();
@@ -1240,17 +1414,20 @@
 				console.warn('Error al mostrar notificación:', err);
 			}
 		}
-	function getLatestMessageSummary(userKey) {
-		if (!userKey) return '';
-		const meta = conversationMeta[userKey];
-		if (meta && meta.lmp) {
-			return meta.lmp;
+		function getLatestMessageSummary(userKey) {
+			if (!userKey) return '';
+			const meta = conversationMeta[userKey];
+			if (meta && meta.lmp) {
+				return meta.lmp;
+			}
+			return '';
 		}
-		return '';
-	}		function notifyNewConversation(userKey) {
+
+		function notifyNewConversation(userKey) {
 			if (currentUser.role !== 'admin') return;
 			if (!userListHydrated) return;
 			if (!userKey || userKey === selectedUserKey) return;
+			// No notificar si ya está leído o si es viejo
 			const lastTs = getLastMessageTs(userKey);
 			const readTs = adminReadState[userKey] || 0;
 			// Solo notificar si el último mensaje es realmente más nuevo que el último leído y no es viejo
@@ -1262,6 +1439,7 @@
 			lastMessageTimestamps[userKey] = lastTs;
 			const displayName = getDisplayName(userKey) || userKey;
 			const body = getLatestMessageSummary(userKey) || 'Nuevo chat disponible';
+			console.log('🔔 Nueva conversación detectada:', displayName, body);
 			playNotificationSound();
 			showNotification(`💬 ${displayName}`, body);
 		}
@@ -1329,6 +1507,7 @@
 					} else {
 						notifBody = 'Mensaje nuevo';
 					}
+					console.log('🔔 Mostrando notificación para:', userName, notifBody);
 					showNotification(`💬 ${userName}`, notifBody);
 				}
 			}
@@ -1390,7 +1569,7 @@
 						adminNotes[userKey] = noteText;
 						await setDoc(doc(fs, 'adminNotes', userKey), {
 							note: noteText,
-							ua: fsServerTimestamp()
+							updatedAt: fsServerTimestamp()
 						});
 						updateActiveChatHeader();
 					} catch (err) {
@@ -1519,12 +1698,64 @@
 					r.textContent = '❤️';
 					wrap.appendChild(r);
 				}
+				// Botón de eliminar (solo para mensajes de admin, visible solo para admin)
+				if (currentUser.role === 'admin' && roleVal === 'admin') {
+					const deleteBtn = document.createElement('button');
+					deleteBtn.className = 'delete-message-btn';
+					deleteBtn.textContent = '🗑️';
+					deleteBtn.title = 'Eliminar mensaje';
+					deleteBtn.style.display = 'flex';
+					deleteBtn.addEventListener('click', (e) => {
+						e.stopPropagation();
+						if (confirm('¿Eliminar este mensaje? Se borrará para todos los usuarios.')) {
+							deleteMessage(String(id), userKey);
+						}
+					});
+					wrap.appendChild(deleteBtn);
+				}
 				// Toggle reacción con clic derecho
 				wrap.addEventListener('contextmenu', (e) => {
 					e.preventDefault();
 					if (!id) return;
 					toggleMessageReaction(String(id));
 				});
+				
+				// Copiar mensaje al mantener presionado (solo para usuarios en mensajes del admin)
+				if (currentUser.role === 'user' && roleVal === 'admin') {
+					let pressTimer = null;
+					let touchStarted = false;
+					
+					const startPress = (e) => {
+						touchStarted = true;
+						wrap.classList.add('pressing');
+						pressTimer = setTimeout(() => {
+							if (touchStarted) {
+								copyMessageToClipboard(wrap, textVal || '');
+							}
+						}, 500); // 500ms = medio segundo
+					};
+					
+					const cancelPress = () => {
+						touchStarted = false;
+						wrap.classList.remove('pressing');
+						if (pressTimer) {
+							clearTimeout(pressTimer);
+							pressTimer = null;
+						}
+					};
+					
+					// Touch events (móvil)
+					wrap.addEventListener('touchstart', startPress, { passive: true });
+					wrap.addEventListener('touchend', cancelPress);
+					wrap.addEventListener('touchcancel', cancelPress);
+					wrap.addEventListener('touchmove', cancelPress);
+					
+					// Mouse events (escritorio, para testing)
+					wrap.addEventListener('mousedown', startPress);
+					wrap.addEventListener('mouseup', cancelPress);
+					wrap.addEventListener('mouseleave', cancelPress);
+				}
+				
 				// Guardar ts para ordenamiento estable en el DOM
 				wrap.dataset.ts = String(msg.ts || 0);
 				// Insertar en el lugar correcto por ts (asc)
@@ -1573,6 +1804,59 @@
 				} else {
 					if (node) node.remove();
 				}
+			}
+
+			function copyMessageToClipboard(messageElement, text) {
+				if (!text || !text.trim()) return;
+				
+				// Copiar al portapapeles
+				const copyText = text.trim();
+				
+				// Método moderno (Clipboard API)
+				if (navigator.clipboard && navigator.clipboard.writeText) {
+					navigator.clipboard.writeText(copyText).then(() => {
+						showCopyTooltip(messageElement);
+					}).catch(() => {
+						// Fallback si falla
+						fallbackCopy(copyText, messageElement);
+					});
+				} else {
+					// Fallback para navegadores antiguos
+					fallbackCopy(copyText, messageElement);
+				}
+			}
+			
+			function fallbackCopy(text, messageElement) {
+				try {
+					const textarea = document.createElement('textarea');
+					textarea.value = text;
+					textarea.style.position = 'fixed';
+					textarea.style.opacity = '0';
+					document.body.appendChild(textarea);
+					textarea.select();
+					document.execCommand('copy');
+					document.body.removeChild(textarea);
+					showCopyTooltip(messageElement);
+				} catch (err) {
+					console.error('Error al copiar:', err);
+				}
+			}
+			
+			function showCopyTooltip(messageElement) {
+				// Crear tooltip
+				const tooltip = document.createElement('div');
+				tooltip.className = 'copy-tooltip';
+				tooltip.textContent = 'Mensaje copiado';
+				
+				// Agregar al mensaje
+				messageElement.appendChild(tooltip);
+				
+				// Remover después de la animación (2.3s)
+				setTimeout(() => {
+					if (tooltip.parentElement) {
+						tooltip.remove();
+					}
+				}, 2300);
 			}
 
 			function updatePdfDom(uniqueId, msg) {
@@ -1643,7 +1927,7 @@
 					updateReactionDom(uniqueId, newVal);
 					// Firestore: intentar actualizar por id directo; si falla, buscar por rtdbKey
 					try {
-						await setDoc(doc(fs, 'mensajes', uniqueId), { reactionHeart: newVal, ua: fsServerTimestamp() }, { merge: true });
+						await setDoc(doc(fs, 'mensajes', uniqueId), { reactionHeart: newVal, updatedAt: fsServerTimestamp() }, { merge: true });
 					} catch (err1) {
 						try {
 							const colRef = collection(fs, 'mensajes');
@@ -1651,7 +1935,7 @@
 							const snap = await getDocs(q);
 							if (!snap.empty) {
 								const batch = writeBatch(fs);
-								snap.forEach(d => batch.update(d.ref, { reactionHeart: newVal, ua: fsServerTimestamp() }));
+								snap.forEach(d => batch.update(d.ref, { reactionHeart: newVal, updatedAt: fsServerTimestamp() }));
 								await batch.commit();
 							}
 						} catch (err2) {
@@ -1660,6 +1944,52 @@
 					}
 				} catch (err) {
 					console.error('Error alternando reacción:', err);
+				}
+			}
+
+			async function deleteMessage(uniqueId, userKey) {
+				try {
+					if (!uniqueId || !userKey) return;
+					
+					// 1. Eliminar del DOM
+					const msgElement = document.getElementById('msg_' + uniqueId);
+					if (msgElement) {
+						msgElement.remove();
+					}
+					
+					// 2. Eliminar del índice local
+					renderedMessageIds.delete(uniqueId);
+					messageIndex.delete(uniqueId);
+					
+					// 3. Eliminar de RTDB
+					try {
+						await remove(ref(db, `chat/conversaciones/${userKey}/${uniqueId}`));
+					} catch (err) {
+						console.warn('No se pudo eliminar mensaje de RTDB:', err);
+					}
+					
+					// 4. Eliminar de Firestore (intentar por id directo primero, luego por rtdbKey)
+					try {
+						await deleteDoc(doc(fs, 'mensajes', uniqueId));
+					} catch (err1) {
+						try {
+							const colRef = collection(fs, 'mensajes');
+							const q = fsQuery(colRef, where('rtdbKey', '==', uniqueId), where('userKeyNormalized', '==', (userKey || '').toLowerCase()));
+							const snap = await getDocs(q);
+							if (!snap.empty) {
+								const batch = writeBatch(fs);
+								snap.forEach(d => batch.delete(d.ref));
+								await batch.commit();
+							}
+						} catch (err2) {
+							console.warn('No se pudo eliminar mensaje de Firestore:', err2);
+						}
+					}
+					
+					console.log('Mensaje eliminado correctamente:', uniqueId);
+				} catch (err) {
+					console.error('Error eliminando mensaje:', err);
+					alert('No se pudo eliminar el mensaje. Intenta de nuevo.');
 				}
 			}
 
@@ -1785,6 +2115,7 @@
 
 			async function upsertConversationMetadata(userKey, info = {}) {
 				if (!userKey) return;
+				// Determinar tipo del último contenido
 				let type = info.type;
 				if (!type) {
 					if (info.text) type = 'text';
@@ -1794,10 +2125,12 @@
 					else if (info.name && /\.pdf$/i.test(info.name)) type = 'pdf';
 					else type = 'text';
 				}
+
+				// Política: no guardar contenido de texto como preview ni tipificarlo como "text",
+				// pero sí crear/actualizar un documento mínimo para que el admin vea la conversación.
+				// Para multimedia (imagen/audio/pdf), mantenemos un resumen básico.
 				let preview = null;
-				if (type === 'text') {
-					preview = (info.text || '').slice(0, 120);
-				} else if (type === 'image') {
+				if (type === 'image') {
 					preview = info.name ? `📷 ${info.name}` : '📷 Imagen enviada';
 				} else if (type === 'audio') {
 					preview = '🎤 Audio enviado';
@@ -1808,8 +2141,9 @@
 				const payload = {
 					uk: userKey,
 					hh: true,
-					lmt: type,
-					lmp: preview,
+					// No guardar texto como tipo "text" ni su preview
+					lmt: (type === 'text') ? null : type,
+					lmp: (type === 'text') ? '' : preview,
 					lmts: ts,
 					ls: info.sender || null,
 					lsr: info.role || null,
@@ -2842,6 +3176,9 @@
 				function renderUserList() {
 					clearUserList();
 					const q = (document.getElementById('userSearch')?.value || '').trim().toLowerCase();
+					if (q) {
+						console.log('Buscando usuarios con término:', q);
+					}
 					const combinedKeys = new Set(Object.keys(conversationMeta || {}));
 					Object.keys(userAliases || {}).forEach(key => combinedKeys.add(key));
 					const newKeys = [];
@@ -2862,14 +3199,17 @@
 						notifyNewConversation(userKey);
 					});
 					const users = Array.from(combinedKeys).filter(u => {
-						const name = (getDisplayName(u) || u || '').toLowerCase();
-						return !q || name.includes(q);
+						if (!q) return true; // Sin búsqueda, mostrar todos
+						const displayName = (getDisplayName(u) || '').toLowerCase();
+						const userKey = (u || '').toLowerCase();
+						// Buscar tanto en el alias como en el username
+						return displayName.includes(q) || userKey.includes(q);
 					});
 					const sortedUsers = users.sort((a, b) => {
 						const metaA = conversationMeta[a];
 						const metaB = conversationMeta[b];
-						const tsA = metaA && typeof metaA.lmts === 'number' ? metaA.lmts : (metaA && metaA.updatedAtMs) || 0;
-						const tsB = metaB && typeof metaB.lmts === 'number' ? metaB.lmts : (metaB && metaB.updatedAtMs) || 0;
+						const tsA = metaA && typeof metaA.lmts === 'number' ? metaA.lmts : (metaA && metaA.ua) || 0;
+						const tsB = metaB && typeof metaB.lmts === 'number' ? metaB.lmts : (metaB && metaB.ua) || 0;
 						if (tsA !== tsB) {
 							return tsB - tsA;
 						}
@@ -2893,16 +3233,16 @@
 						span.style.flex = '1';
 						btn.appendChild(span);
 						const meta = conversationMeta[userKey] || {};
-						if (meta.lmp) {
+						if (meta.lastMessagePreview) {
 							const preview = document.createElement('div');
-							preview.textContent = meta.lmp;
+							preview.textContent = meta.lastMessagePreview;
 							preview.style.cssText = 'font-size:11px;color:#a0a6b7;margin-top:2px;text-align:left;';
 							btn.appendChild(preview);
 						}
 						let unreadCount = (typeof unreadCounts[userKey] === 'number') ? unreadCounts[userKey] : 0;
 						if (unreadCount === 0) {
 							const readTs = adminReadState[userKey] || 0;
-							const lastTs = (meta && typeof meta.lmts === 'number') ? meta.lmts : 0;
+							const lastTs = (meta && typeof meta.lastMessageTs === 'number') ? meta.lastMessageTs : 0;
 							unreadCount = (lastTs > readTs && userKey !== selectedUserKey) ? 1 : 0;
 						}
 						if (unreadCount > 0) {
@@ -2944,10 +3284,21 @@
 
 				function ensureAdminSubscriptions() {
 					if (!unsubscribeAliases) {
-						const aliasesRef = ref(db, 'chat/aliases');
-						unsubscribeAliases = onValue(aliasesRef, snap => {
-							userAliases = snap.val() || {};
+						// Cargar aliases desde Firestore en lugar de RTDB
+						const aliasesCol = collection(fs, 'userAliases');
+						unsubscribeAliases = onSnapshot(aliasesCol, (snap) => {
+							const newAliases = {};
+							snap.forEach((docSnap) => {
+								const data = docSnap.data();
+								if (data && data.alias) {
+									newAliases[docSnap.id] = data.alias;
+								}
+							});
+							userAliases = newAliases;
 							renderUserList();
+						}, (error) => {
+							console.warn('Error al cargar aliases desde Firestore:', error);
+							userAliases = {};
 						});
 					}
 					if (!unsubscribeConversationsMeta) {
@@ -2958,7 +3309,7 @@
 								const data = docSnap.data() || {};
 								const normalized = {
 									...data,
-									updatedAtMs: data.ua && typeof data.ua.toMillis === 'function' ? data.ua.toMillis() : null
+									updatedAtMs: data.updatedAt && typeof data.updatedAt.toMillis === 'function' ? data.updatedAt.toMillis() : null
 								};
 								nextMeta[docSnap.id] = normalized;
 							});
@@ -2997,11 +3348,6 @@
 						}
 					}
 					renderUserList();
-					const searchInput = document.getElementById('userSearch');
-					if (searchInput && !searchInput.dataset.bound) {
-						searchInput.addEventListener('input', () => renderUserList());
-						searchInput.dataset.bound = '1';
-					}
 				}
 
 				let contextMenuEl = null;
@@ -3061,13 +3407,14 @@
 							updateActiveChatHeader();
 						}
 
-						// 2) Borrar RTDB: conversación y alias
+						// 2) Borrar RTDB: conversación y alias (legacy)
 						try { await remove(ref(db, 'chat/conversaciones/' + userKey)); } catch (err) { console.warn('No se pudo borrar RTDB conversación:', err); }
-						try { await remove(ref(db, 'chat/aliases/' + normalized)); } catch (err) { /* opcional */ }
+						try { await remove(ref(db, 'chat/aliases/' + normalized)); } catch (err) { /* opcional - legacy */ }
 
-						// 3) Firestore: borrar metadata de conversación y nota del admin
+						// 3) Firestore: borrar metadata de conversación, nota del admin y alias
 						try { await deleteDoc(doc(fs, 'conversaciones', userKey)); } catch (err) { console.warn('No se pudo borrar metadata de conversación:', err); }
 						try { await deleteDoc(doc(fs, 'adminNotes', userKey)); } catch (err) { /* opcional */ }
+						try { await deleteDoc(doc(fs, 'userAliases', normalized)); } catch (err) { /* opcional - alias */ }
 
 						// 4) Firestore: borrar todos los mensajes de ese usuario
 						try {
@@ -3103,23 +3450,52 @@
 						if (contextMenuEl) closeContextMenu();
 				});
 
-					function renameUserChat(userKey, aliasValue) {
-						const alias = (aliasValue || '').trim();
-						const currentAlias = userAliases[userKey] || '';
-						if (!alias && !currentAlias) {
-							return;
-						}
-						if (alias === currentAlias) {
-							return;
-						}
-						const aliasRef = ref(db, 'chat/aliases/' + (userKey || '').toLowerCase());
-						if (!alias) {
-							remove(aliasRef);
-						} else {
-							set(aliasRef, alias);
-						}
-						if (selectedUserKey === userKey) {
-							updateActiveChatHeader();
+					async function renameUserChat(userKey, aliasValue) {
+						try {
+							const alias = (aliasValue || '').trim();
+							const currentAlias = userAliases[userKey] || '';
+							
+							if (!alias && !currentAlias) {
+								return;
+							}
+							if (alias === currentAlias) {
+								return;
+							}
+							
+							const normalizedKey = (userKey || '').toLowerCase();
+							const aliasDocRef = doc(fs, 'userAliases', normalizedKey);
+							
+							if (!alias) {
+								// Eliminar alias si está vacío
+								await deleteDoc(aliasDocRef);
+								console.log('Alias eliminado para:', userKey);
+							} else {
+								// Guardar o actualizar alias en Firestore
+								await setDoc(aliasDocRef, {
+									alias: alias,
+									userKey: normalizedKey,
+									updatedAt: fsServerTimestamp()
+								}, { merge: true });
+								console.log('Alias guardado para:', userKey, '→', alias);
+							}
+							
+							// Actualizar localmente
+							if (!alias) {
+								delete userAliases[userKey];
+								delete userAliases[normalizedKey];
+							} else {
+								userAliases[userKey] = alias;
+								userAliases[normalizedKey] = alias;
+							}
+							
+							// Actualizar UI
+							if (selectedUserKey === userKey) {
+								updateActiveChatHeader();
+							}
+							renderUserList();
+						} catch (error) {
+							console.error('Error al cambiar nombre de usuario:', error);
+							alert('No se pudo cambiar el nombre. Intenta de nuevo.');
 						}
 					}
 
@@ -3179,6 +3555,90 @@
 				}
 			}
 		});
+		
+		// Configurar el buscador de usuarios
+		const userSearchInput = document.getElementById('userSearch');
+		if (userSearchInput) {
+			userSearchInput.addEventListener('input', () => {
+				if (currentUser.role === 'admin') {
+					renderUserList();
+				}
+			});
+			console.log('Buscador de usuarios configurado correctamente');
+		}
+		
+		// Configurar toggle del panel de accesos rápidos
+		const shortcutsToggleBtn = document.getElementById('shortcutsToggleBtn');
+		
+		if (shortcutsToggleBtn && shortcutsCard) {
+			// Cargar estado guardado
+			let isCollapsed = false;
+			try {
+				const saved = localStorage.getItem('shortcutsPanelCollapsed');
+				if (saved === 'true') {
+					isCollapsed = true;
+					shortcutsCard.classList.add('collapsed');
+					chatRow.classList.add('shortcuts-collapsed');
+					shortcutsToggleBtn.textContent = '▶';
+					shortcutsToggleBtn.title = 'Mostrar panel de accesos rápidos';
+				} else {
+					shortcutsToggleBtn.textContent = '◀';
+					shortcutsToggleBtn.title = 'Ocultar panel de accesos rápidos';
+				}
+			} catch (e) {}
+			
+			shortcutsToggleBtn.addEventListener('click', () => {
+				isCollapsed = !isCollapsed;
+				
+				if (isCollapsed) {
+					shortcutsCard.classList.add('collapsed');
+					chatRow.classList.add('shortcuts-collapsed');
+					shortcutsToggleBtn.textContent = '▶';
+					shortcutsToggleBtn.title = 'Mostrar panel de accesos rápidos';
+				} else {
+					shortcutsCard.classList.remove('collapsed');
+					chatRow.classList.remove('shortcuts-collapsed');
+					shortcutsToggleBtn.textContent = '◀';
+					shortcutsToggleBtn.title = 'Ocultar panel de accesos rápidos';
+				}
+				
+				// Guardar estado
+				try {
+					localStorage.setItem('shortcutsPanelCollapsed', isCollapsed.toString());
+				} catch (e) {}
+			});
+			
+			console.log('Toggle de panel de accesos rápidos configurado');
+		}
+		
+		// Función de emergencia para resetear el panel (disponible en consola)
+		window.resetShortcutsPanel = function() {
+			try {
+				localStorage.removeItem('shortcutsPanelCollapsed');
+				const card = document.getElementById('shortcutsCard');
+				const row = document.getElementById('chatRow');
+				const btn = document.getElementById('shortcutsToggleBtn');
+				
+				if (card) {
+					card.classList.remove('collapsed');
+					card.style.display = 'flex';
+				}
+				if (row) {
+					row.classList.remove('shortcuts-collapsed');
+				}
+				if (btn) {
+					btn.textContent = '◀';
+					btn.title = 'Ocultar panel de accesos rápidos';
+					btn.style.display = 'flex';
+				}
+				
+				console.log('Panel de accesos rápidos reseteado exitosamente');
+				alert('Panel de accesos rápidos reseteado. Recarga la página si es necesario.');
+			} catch (e) {
+				console.error('Error al resetear panel:', e);
+			}
+		};
+		
 		updateClosedStateUI();
 		setInterval(updateClosedStateUI, 60 * 1000);
 		setView(false);
