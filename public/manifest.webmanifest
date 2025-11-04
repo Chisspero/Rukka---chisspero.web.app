@@ -21,7 +21,16 @@
       "text": "text",
       "url": "url",
       "files": [
-        { "name": "file", "accept": ["application/pdf", "application/octet-stream", "application/*", ".pdf"] }
+        { 
+          "name": "file", 
+          "accept": [
+            "application/pdf",
+            "application/octet-stream",
+            "application/*",
+            "image/*",
+            "*/*"
+          ] 
+        }
       ]
     }
   }

@@ -734,7 +734,20 @@
 				try {
 					const data = event.data || {};
 					if (data.type === 'shared-files' && Array.isArray(data.files)) {
-						const pdf = data.files.find(f => f && (f.type === 'application/pdf' || /\.pdf$/i.test(f.name || '')));
+						// Reconstruir archivos desde datos serializados
+						const reconstructedFiles = data.files.map(fileData => {
+							if (fileData.arrayBuffer) {
+								// Archivo serializado desde el SW
+								return new File([fileData.arrayBuffer], fileData.name, {
+									type: fileData.type,
+									lastModified: fileData.lastModified
+								});
+							}
+							// Fallback para formato antiguo
+							return fileData;
+						}).filter(Boolean);
+						
+						const pdf = reconstructedFiles.find(f => f && (f.type === 'application/pdf' || /\.pdf$/i.test(f.name || '')));
 						shareLaunchFlag = true;
 						if (pdf) {
 							if (isLoggedInFlag && currentUser && currentUser.name) {
@@ -745,7 +758,9 @@
 							}
 						}
 					}
-				} catch {}
+				} catch (err) {
+					console.error('Error procesando archivos compartidos:', err);
+				}
 			});
 		}
 
@@ -910,7 +925,7 @@
 
 	function getLastMessageTs(userKey){
 		const meta = conversationMeta[userKey];
-		return (meta && typeof meta.lastMessageTs === 'number') ? meta.lastMessageTs : 0;
+		return (meta && typeof meta.lmts === 'number') ? meta.lmts : 0;
 	}
 	function isClosedHoursBuenosAires(date = new Date()) {
 		try {
@@ -1050,16 +1065,13 @@
 			selectedUserKey = null;
 			clearChat();
 			clearUserList();
-			// Al salir, limpiar vistas previas en UI y estado
 			try { clearImagePreview && clearImagePreview(); } catch {}
 			try { clearAudioPreview && clearAudioPreview(); } catch {}
 			stopInactivityWatch && stopInactivityWatch();
 		}
-
 		updateActiveChatHeader();
 		updateClosedStateUI();
 	}
-
 
 		// ========== SISTEMA DE NOTIFICACIONES ==========
 		function getAudioContext() {
@@ -1099,21 +1111,15 @@
 			return notificationSound;
 		}
 		function playNotificationSound() {
-
-			// Eliminado: toast de copiado (requerimiento: copiar sin avisos visuales)
-			// Si hay sonido personalizado, usarlo
 			if (customNotificationDataUrl) {
 				try {
 					if (!customNotificationAudio) {
 						customNotificationAudio = new Audio(customNotificationDataUrl);
 						customNotificationAudio.preload = 'auto';
 					}
-					// Reiniciar y reproducir
 					try { customNotificationAudio.currentTime = 0; } catch {}
-					// Aplicar volumen guardado
 					try { customNotificationAudio.volume = getSavedVolume(); } catch {}
 					customNotificationAudio.play().catch(() => {
-						// Si falla por política del navegador, caer al beep
 						playDefaultBeep();
 					});
 					return;
@@ -1234,20 +1240,17 @@
 				console.warn('Error al mostrar notificación:', err);
 			}
 		}
-		function getLatestMessageSummary(userKey) {
-			if (!userKey) return '';
-			const meta = conversationMeta[userKey];
-			if (meta && meta.lastMessagePreview) {
-				return meta.lastMessagePreview;
-			}
-			return '';
+	function getLatestMessageSummary(userKey) {
+		if (!userKey) return '';
+		const meta = conversationMeta[userKey];
+		if (meta && meta.lmp) {
+			return meta.lmp;
 		}
-
-		function notifyNewConversation(userKey) {
+		return '';
+	}		function notifyNewConversation(userKey) {
 			if (currentUser.role !== 'admin') return;
 			if (!userListHydrated) return;
 			if (!userKey || userKey === selectedUserKey) return;
-			// No notificar si ya está leído o si es viejo
 			const lastTs = getLastMessageTs(userKey);
 			const readTs = adminReadState[userKey] || 0;
 			// Solo notificar si el último mensaje es realmente más nuevo que el último leído y no es viejo
@@ -1387,7 +1390,7 @@
 						adminNotes[userKey] = noteText;
 						await setDoc(doc(fs, 'adminNotes', userKey), {
 							note: noteText,
-							updatedAt: fsServerTimestamp()
+							ua: fsServerTimestamp()
 						});
 						updateActiveChatHeader();
 					} catch (err) {
@@ -1640,7 +1643,7 @@
 					updateReactionDom(uniqueId, newVal);
 					// Firestore: intentar actualizar por id directo; si falla, buscar por rtdbKey
 					try {
-						await setDoc(doc(fs, 'mensajes', uniqueId), { reactionHeart: newVal, updatedAt: fsServerTimestamp() }, { merge: true });
+						await setDoc(doc(fs, 'mensajes', uniqueId), { reactionHeart: newVal, ua: fsServerTimestamp() }, { merge: true });
 					} catch (err1) {
 						try {
 							const colRef = collection(fs, 'mensajes');
@@ -1648,7 +1651,7 @@
 							const snap = await getDocs(q);
 							if (!snap.empty) {
 								const batch = writeBatch(fs);
-								snap.forEach(d => batch.update(d.ref, { reactionHeart: newVal, updatedAt: fsServerTimestamp() }));
+								snap.forEach(d => batch.update(d.ref, { reactionHeart: newVal, ua: fsServerTimestamp() }));
 								await batch.commit();
 							}
 						} catch (err2) {
@@ -1803,14 +1806,14 @@
 				}
 				const ts = typeof info.ts === 'number' ? info.ts : nowMs();
 				const payload = {
-					userKey,
-					hasHistory: true,
-					lastMessageType: type,
-					lastMessagePreview: preview,
-					lastMessageTs: ts,
-					lastSender: info.sender || null,
-					lastSenderRole: info.role || null,
-					updatedAt: fsServerTimestamp()
+					uk: userKey,
+					hh: true,
+					lmt: type,
+					lmp: preview,
+					lmts: ts,
+					ls: info.sender || null,
+					lsr: info.role || null,
+					ua: fsServerTimestamp()
 				};
 				try {
 					await setDoc(doc(fs, 'conversaciones', userKey), payload, { merge: true });
@@ -1931,6 +1934,22 @@
 						reject(err);
 					}
 				});
+			}
+
+			async function convertImageToJPEGDataURL(file, opts = {}) {
+				return await compressImageToDataURL(file, opts);
+			}
+
+			async function convertImageToJPEGFile(file, opts = {}) {
+				const dataUrl = await compressImageToDataURL(file, opts);
+				const blob = dataURLToBlob(dataUrl);
+				const baseName = ((file && file.name) ? file.name : 'imagen').replace(/\.[^.]+$/, '');
+				try {
+					return new File([blob], baseName + '.jpg', { type: 'image/jpeg' });
+				} catch (_) {
+					blob.name = baseName + '.jpg';
+					return blob;
+				}
 			}
 
 				async function fileToDataUrl(file) {
@@ -2207,9 +2226,9 @@
 						userChatKey = currentUser.name;
 					}
 					if (!userChatKey) return;
-					const dataUrl = await compressImageToDataURL(file, { maxSize: 960, quality: 0.75 });
+					const dataUrl = await compressImageToDataURL(file, { maxSize: 960, quality: 0.70 });
 					const approxBytes = Math.ceil((dataUrl.length - 'data:image/jpeg;base64,'.length) * 3 / 4);
-					if (approxBytes > 400 * 1024) {
+					if (approxBytes > 700 * 1024) {
 						throw new Error('La imagen es muy pesada');
 					}
 					const now = nowMs();
@@ -2849,8 +2868,8 @@
 					const sortedUsers = users.sort((a, b) => {
 						const metaA = conversationMeta[a];
 						const metaB = conversationMeta[b];
-						const tsA = metaA && typeof metaA.lastMessageTs === 'number' ? metaA.lastMessageTs : (metaA && metaA.updatedAtMs) || 0;
-						const tsB = metaB && typeof metaB.lastMessageTs === 'number' ? metaB.lastMessageTs : (metaB && metaB.updatedAtMs) || 0;
+						const tsA = metaA && typeof metaA.lmts === 'number' ? metaA.lmts : (metaA && metaA.updatedAtMs) || 0;
+						const tsB = metaB && typeof metaB.lmts === 'number' ? metaB.lmts : (metaB && metaB.updatedAtMs) || 0;
 						if (tsA !== tsB) {
 							return tsB - tsA;
 						}
@@ -2874,16 +2893,16 @@
 						span.style.flex = '1';
 						btn.appendChild(span);
 						const meta = conversationMeta[userKey] || {};
-						if (meta.lastMessagePreview) {
+						if (meta.lmp) {
 							const preview = document.createElement('div');
-							preview.textContent = meta.lastMessagePreview;
+							preview.textContent = meta.lmp;
 							preview.style.cssText = 'font-size:11px;color:#a0a6b7;margin-top:2px;text-align:left;';
 							btn.appendChild(preview);
 						}
 						let unreadCount = (typeof unreadCounts[userKey] === 'number') ? unreadCounts[userKey] : 0;
 						if (unreadCount === 0) {
 							const readTs = adminReadState[userKey] || 0;
-							const lastTs = (meta && typeof meta.lastMessageTs === 'number') ? meta.lastMessageTs : 0;
+							const lastTs = (meta && typeof meta.lmts === 'number') ? meta.lmts : 0;
 							unreadCount = (lastTs > readTs && userKey !== selectedUserKey) ? 1 : 0;
 						}
 						if (unreadCount > 0) {
@@ -2939,7 +2958,7 @@
 								const data = docSnap.data() || {};
 								const normalized = {
 									...data,
-									updatedAtMs: data.updatedAt && typeof data.updatedAt.toMillis === 'function' ? data.updatedAt.toMillis() : null
+									updatedAtMs: data.ua && typeof data.ua.toMillis === 'function' ? data.ua.toMillis() : null
 								};
 								nextMeta[docSnap.id] = normalized;
 							});

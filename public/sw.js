@@ -1,5 +1,7 @@
 'use strict';
 
+const SW_VERSION = 'v2.0.0';
+
 self.addEventListener('install', (event) => {
   // Activar inmediatamente la nueva versión del SW
   event.waitUntil(self.skipWaiting());
@@ -46,10 +48,32 @@ self.addEventListener('fetch', (event) => {
         // Puede venir uno o varios archivos con el nombre de campo "file"
         const files = formData.getAll('file').filter(Boolean);
 
-        // Pasar los archivos al cliente (ventana)
-        focusOrOpenAndPostMessage({ type: 'shared-files', files });
+        // Convertir archivos a un formato serializable
+        const serializedFiles = await Promise.all(
+          files.map(async (file) => {
+            try {
+              const arrayBuffer = await file.arrayBuffer();
+              return {
+                name: file.name,
+                type: file.type,
+                size: file.size,
+                lastModified: file.lastModified,
+                arrayBuffer: arrayBuffer
+              };
+            } catch (err) {
+              console.error('Error al serializar archivo:', err);
+              return null;
+            }
+          })
+        );
+
+        const validFiles = serializedFiles.filter(Boolean);
+
+        if (validFiles.length > 0) {
+          focusOrOpenAndPostMessage({ type: 'shared-files', files: validFiles });
+        }
       } catch (e) {
-        // noop
+        console.error('Error en share-target:', e);
       }
       // Redirigir a la app principal
       return Response.redirect('/?share=1', 303);

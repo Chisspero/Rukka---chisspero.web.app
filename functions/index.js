@@ -36,18 +36,18 @@ async function resetConversationsMetadata(db) {
   let batch = db.batch();
   let count = 0;
   const template = {
-    lastMessageType: null,
-    lastMessagePreview: '',
-    lastMessageTs: null,
-    lastSender: null,
-    lastSenderRole: null,
-    hasHistory: false,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    lmt: null,
+    lmp: '',
+    lmts: null,
+    ls: null,
+    lsr: null,
+    hh: false,
+    ua: admin.firestore.FieldValue.serverTimestamp()
   };
 
   for (const docSnap of snap.docs) {
     const data = docSnap.data() || {};
-    const alreadyReset = !data.hasHistory && !data.lastMessageTs && !data.lastMessageType && !data.lastMessagePreview;
+    const alreadyReset = !data.hh && !data.lmts && !data.lmt && !data.lmp;
     if (alreadyReset) {
       continue;
     }
@@ -72,14 +72,14 @@ async function resetConversationsMetadata(db) {
 function buildMetadataPayload(userKey, msg) {
   if (!msg) {
     return {
-      userKey,
-      hasHistory: false,
-      lastMessageType: null,
-      lastMessagePreview: '',
-      lastMessageTs: null,
-      lastSender: null,
-      lastSenderRole: null,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      uk: userKey,
+      hh: false,
+      lmt: null,
+      lmp: '',
+      lmts: null,
+      ls: null,
+      lsr: null,
+      ua: admin.firestore.FieldValue.serverTimestamp()
     };
   }
 
@@ -99,14 +99,14 @@ function buildMetadataPayload(userKey, msg) {
   }
 
   return {
-    userKey,
-    hasHistory: true,
-    lastMessageType: type,
-    lastMessagePreview: preview,
-    lastMessageTs: msg.ts || null,
-    lastSender: msg.sender || null,
-    lastSenderRole: msg.role || null,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    uk: userKey,
+    hh: true,
+    lmt: type,
+    lmp: preview,
+    lmts: msg.ts || null,
+    ls: msg.sender || null,
+    lsr: msg.role || null,
+    ua: admin.firestore.FieldValue.serverTimestamp()
   };
 }
 
@@ -115,11 +115,9 @@ async function updateConversationMetadata(db, userKey, msg) {
   await db.collection('conversaciones').doc(userKey).set(payload, { merge: true });
 }
 
-// Eliminado: lógica de recorte por hora (TRIM_RETENTION_MS / trimConversation)
-
-exports.trimRealtimeConversations = onSchedule(
+exports.optimizedFullCleanup = onSchedule(
   {
-    schedule: '0 4 * * *',
+    schedule: '0 4 * * *', // Todos los días a las 04:00
     timeZone: 'America/Argentina/Buenos_Aires',
     maxInstances: 1,
     retryCount: 0
@@ -127,28 +125,18 @@ exports.trimRealtimeConversations = onSchedule(
   async () => {
     const rtdb = admin.database();
     const db = admin.firestore();
-
     try {
       await rtdb.ref('chat/conversaciones').remove();
-      const snap = await db.collection('conversaciones').get();
-      const batch = db.batch();
-      snap.forEach(doc => {
-        batch.set(doc.ref, {
-          hasHistory: false,
-          lastMessageType: null,
-          lastMessagePreview: '',
-          lastMessageTs: null,
-          lastSender: null,
-          lastSenderRole: null,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
-      });
-      await batch.commit();
+    } catch (_) { /* silencio */ }
 
-      logger.info('Limpieza simple completada sin lecturas');
-    } catch (err) {
-      logger.error('Error durante limpieza simple', err);
-    }
+    try {
+      const collections = await db.listCollections();
+      for (const col of collections) {
+        const colName = col.id;
+        if (colName === 'adminState') continue;
+        await deleteCollectionBatched(colName, 400);
+      }
+    } catch (_) { /* silencio */ }
   }
 );
 
@@ -178,13 +166,13 @@ exports.adminClearChats = onCall({ cors: true }, async (request) => {
 
     try {
       await db.collection('conversaciones').doc(userKey).set({
-        lastMessageType: null,
-        lastMessagePreview: '',
-        lastMessageTs: null,
-        lastSender: null,
-        lastSenderRole: null,
-        hasHistory: false,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        lmt: null,
+        lmp: '',
+        lmts: null,
+        ls: null,
+        lsr: null,
+        hh: false,
+        ua: admin.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
     } catch (err) {
       logger.error(`No se pudo resetear metadata para ${userKey}`, err);
@@ -200,46 +188,3 @@ exports.adminClearChats = onCall({ cors: true }, async (request) => {
 
   return { deletedRTDB, deletedFS };
 });
-
-
-exports.dailyCleanup = onSchedule(
-  {
-    schedule: '0 4 * * *', // todos los dias 04:00
-    timeZone: 'America/Argentina/Buenos_Aires',
-    retryCount: 0,
-    maxInstances: 1
-  },
-  async () => {
-    const rtdb = admin.database();
-    const db = admin.firestore();
-    
-    let deletedRTDB = 0;
-    let deletedFS = 0;
-    
-    try {
-      await rtdb.ref('chat/conversaciones').remove();
-      deletedRTDB = 1; // Confirmación de que se borró la rama completa
-      logger.info('RTDB: rama chat/conversaciones eliminada');
-    } catch (err) {
-      logger.error('Error eliminando conversaciones de RTDB', err);
-    }
-    
-    try {
-      // Borrar todos los mensajes de Firestore (multimedia archivado)
-      deletedFS = await deleteCollectionBatched('mensajes', 500);
-      logger.info(`Firestore: ${deletedFS} documentos eliminados de la colección mensajes`);
-    } catch (err) {
-      logger.error('Error eliminando mensajes de Firestore', err);
-    }
-    
-    try {
-      // Resetear metadata de conversaciones
-      const resetCount = await resetConversationsMetadata(db);
-      logger.info(`Firestore: metadata reseteada en ${resetCount} conversaciones`);
-    } catch (err) {
-      logger.error('Error reseteando metadata de conversaciones', err);
-    }
-    
-    logger.info(`Limpieza diaria completada: RTDB limpiado, ${deletedFS} docs eliminados de Firestore`);
-  }
-);
